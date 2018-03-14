@@ -6,6 +6,8 @@ using System.Threading;
 
 using DiscordBot.Core;
 
+using Timer = System.Timers.Timer;
+
 namespace DiscordBot
 {
     public sealed class Program
@@ -34,7 +36,7 @@ namespace DiscordBot
             CultureInfo.DefaultThreadCurrentUICulture = culture;
 
             //Workaround for GC not collecting memory that was freed ages ago, eventually resulting in OOM errors
-            System.Timers.Timer t = new System.Timers.Timer(4 * 60 * 1000);
+            Timer t = new Timer(4 * 60 * 1000);
             t.Elapsed += (s, e) =>
             {
                 //Read the current memory used
