@@ -1,0 +1,1465 @@
+﻿using System;
+using System.Linq;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.RegularExpressions;
+
+using Discord;
+using Discord.WebSocket;
+
+using DiscordBot.Raids;
+using DiscordBot.Utils;
+
+namespace DiscordBot.Core
+{
+    public sealed partial class Bot
+    {
+        private static readonly string RAID_CALENDAR_FILE = "raid_calendar.xml";
+
+        private struct QueuedMessage
+        {
+            public ulong  userID;
+            public string text;
+        }
+
+        [CommandInit]
+        private void ConstructRaidCommands()
+        {
+            //Register our Raid command category + commands
+            this.commandCategories.Add
+            (
+                new CommandCategory("raid", thistype, "CmdRaidHelp")
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "create", this, "CmdRaidCreate", "CmdRaidCreateHelp",
+                        "Day/Month",    @"(3[01]|[12][0-9]|0?[1-9])/(1[0-2]|0?[1-9])(?:$|\s)",
+                        "HH:MM",        @"(2[0-3]|[01]?[0-9]):([0-5][0-9])(?:$|\s)",
+                        "UTC timezone", @"UTC\s*([+-])\s*(1[0-2]|0?[0-9])(?:$|\s)",
+                        "Description",  @"(.+?)$"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "create", this, "CmdRaidCreateTodayOrTomorrow", "CmdRaidCreateHelp",
+                        "today or tomorrow", @"(today|tomorrow)(?:$|\s)",
+                        "HH:MM",             @"(2[0-3]|[01]?[0-9]):([0-5][0-9])(?:$|\s)",
+                        "UTC timezone",      @"UTC\s*([+-])\s*(1[0-2]|0?[0-9])(?:$|\s)",
+                        "Description",       @"(.+?)$"
+                    )
+                )
+                //TODO: Raid complete stuff, gw2raidheroes? GitHub page etc?
+                //Upload logs to bot, store in raids/{id} folder?
+                /*.RegisterCommand
+                (
+                    new Command
+                    (
+                        "complete", this, "CmdRaidComplete", "CmdRaidCompleteHelp",
+                        "ID", @"(\d+)(?:$|\s)",
+                        "HH:MM", @"(2[0-3]|[01]?[0-9]):([0-5][0-9])(?:$|\s)",
+                        "Notes", @"(.+?)$"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "complete", this, "CmdRaidCompleteSimple", "CmdRaidCompleteHelp",
+                        "HH:MM", @"(2[0-3]|[01]?[0-9]):([0-5][0-9])(?:$|\s)",
+                        "Notes", @"(.+?)$"
+                    )
+                )*/
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "delete", this, "CmdRaidDelete", "CmdRaidDeleteHelp",
+                        "ID", @"(\d+)(?:$|\s)"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "roster", this, "CmdRaidRosterFilter", "CmdRaidRosterHelp",
+                        "ID",     @"(\d+)(?:$|\s)",
+                        "Filter", @"(.+?)$"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "roster", this, "CmdRaidRoster", "CmdRaidRosterHelp",
+                        "ID", @"(\d+)(?:$|\s)"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "list", this, "CmdRaidList", null
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "join", this, "CmdRaidJoin", "CmdRaidJoinHelp",
+                        "ID",    @"(\d+)(?:$|\s)",
+                        "Roles", @"(.+?)$"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "join", this, "CmdRaidJoinSimple", "CmdRaidJoinHelp",
+                        "Roles", @"(\D.+?)$"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "leave", this, "CmdRaidLeave", "CmdRaidLeaveHelp",
+                        "ID", @"(\d+)(?:$|\s)"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "notify", this, "CmdRaidNotifyRemove", "CmdRaidNotifyHelp",
+                        "remove", @"remove(?:$|\s)"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "notify", this, "CmdRaidNotify", "CmdRaidNotifyHelp",
+                        "times", @"(.+?)$"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "make", this, "CmdRaidMakeComp", "CmdRaidMakeCompHelp",
+                        "comp", @"comp(?:$|\s)",
+                        "ID",   @"(\d+)(?:$|\s)"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "make", this, "CmdRaidMakeCompSimple", "CmdRaidMakeCompHelp",
+                        "comp", @"comp(?:$|\s)"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "make", this, "CmdRaidMakeCompTest", "CmdRaidMakeCompHelp",
+                        "test", @"test(?:$|\s)"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "help", this, "CmdRaidHelp", null
+                    )
+                )
+            );
+
+            //Create list to hold important messages
+            this.importantMessages = new List<QueuedMessage>();
+
+            //Search for the saved raid calendar
+            if (File.Exists(RAID_CALENDAR_FILE))
+            {
+                //Catch any errors
+                try
+                {
+                    //Try to load from file
+                    this.raidCalendar = RaidCalendar.LoadFromFile(RAID_CALENDAR_FILE);
+                }
+                catch (Exception ex)
+                {
+                    //Log error
+                    Logger.Log(LOG_LEVEL.ERROR, "Couldn't load " + RAID_CALENDAR_FILE + "!\n" + ex.Message);
+
+                    //Load default
+                    this.raidCalendar = new RaidCalendar();
+                }
+            }
+            else
+            {
+                //Load default
+                this.raidCalendar = new RaidCalendar();
+            }
+        }
+
+        /* Spooky unsafe C stuff */
+
+        enum C_Roles : Int32
+        {
+            MES   = 1,
+	        HEAL  = 2,
+	        DPS   = 4,
+	        SLAVE = 8,
+	        Count = 4
+        }
+
+        enum C_RoleWeight : Int32
+        {
+	        MES_WEIGHT = 0,
+	        HEAL_WEIGHT,
+	        DPS_WEIGHT,
+	        SLAVE_WEIGHT
+        };
+
+        [StructLayout(LayoutKind.Explicit)]
+        unsafe struct C_Raider
+        {
+            [FieldOffset(0)]
+            public UInt64 userID;
+
+            [FieldOffset(8)]
+            public Int32 role;
+
+            [FieldOffset(12)]
+            public fixed float weights[(int)C_Roles.Count];
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        unsafe struct C_Comp
+        {
+            [FieldOffset(0)]
+            public fixed ulong userID[10];
+        }
+
+        [DllImport("CppUtils")]
+        private static unsafe extern C_Comp* make_raid_comp(C_Raider* roster, uint count);
+
+        [DllImport("CppUtils")]
+        private static unsafe extern void free_comp(C_Comp* comp);
+
+        [StructLayout(LayoutKind.Explicit)]
+        unsafe struct CPP_User
+        {
+            [FieldOffset(0)]
+            public ulong userID;
+
+            [FieldOffset(8)]
+            public fixed float weights[5];
+        };
+
+        [StructLayout(LayoutKind.Explicit)]
+        unsafe struct CPP_Idk
+        {
+            [FieldOffset(0)]
+            public ulong userID;
+
+            [FieldOffset(8)]
+            public float weight;
+        }
+
+        [DllImport("/root/test/billy_herrington.so")]
+        private static unsafe extern void solve_default(CPP_User* users, int length, CPP_Idk* output);
+
+        /* End of spooky unsafe C stuff */
+
+        struct Raid
+        {
+            public string fullName;
+            public long   timestamp;
+            public int    raidID;
+        };
+
+        /// <summary>
+        /// Enumerates all the raids
+        /// </summary>
+        /// <returns>Returns an enumerable collection of Raids.</returns>
+        private static IEnumerable<Raid> EnumerateRaids()
+        {
+            //Create a regex to match a raid folder
+            Regex regex = new Regex(@"^raid_(\d+)_(\d+)$");
+
+            //Return a collection of raids
+            return Directory.EnumerateDirectories("./raids/") //Enumerate folders under raid directory
+                            .Where (f => regex.IsMatch(f))    //Filter out non-raids
+                            .Select(f => regex.Match(f))      //Extract timestamp and ID
+                            .Select(r => new Raid             //Wrap in a simple aggregate object  
+                            {
+                                fullName  = r.Name,
+                                timestamp = long.Parse(r.Groups[1].Value),
+                                raidID    =  int.Parse(r.Groups[2].Value)
+                            });
+        }
+
+        /// <summary>
+        /// Searches for an available ID to assign to a new raid.
+        /// </summary>
+        /// <returns>
+        /// A number between 1 and <see cref="Int32.MaxValue"/> if successful,
+        /// returns -1 if the operation failed.
+        /// </returns>
+        private static int GetNextAvailableRaidID()
+        {
+            //Create a sorted set to hold used IDs
+            SortedSet<int> usedIDs = new SortedSet<int>();
+
+            //Catch any errors
+            try
+            {
+                //Find used raid IDs
+                var coll = EnumerateRaids().Select(r => r.raidID);
+
+                //Iterate over ids
+                foreach (int id in coll)
+                {
+                    //Add to the sorted set
+                    usedIDs.Add(id);
+                }
+
+                //If collection is empty we just return 1
+                if (usedIDs.Count == 0) return 1;
+
+                //Starting at 1, loop until we find an unused id
+                for (int i = 1; i < usedIDs.Max; i++)
+                {
+                    //Check if the set does not contain the ID
+                    if (!usedIDs.Contains(i))
+                    {
+                        //Return this ID
+                        return i;
+                    }
+                }
+
+                //Return Max + 1
+                return usedIDs.Max + 1;
+            }
+            catch (Exception ex)
+            {
+                //Log error
+                Logger.Log(LOG_LEVEL.ERROR, ex.Message);
+
+                //Return failure
+                return -1;
+            }
+        }
+
+        /// <summary>
+        /// Initialises a new raid.
+        /// </summary>
+        /// <param name="offset">The time offset for when the raid starts.</param>
+        /// <param name="description">The description of the raid.</param>
+        /// <returns>
+        /// Returns the assigned ID for the raid which will be in the range 1 to
+        /// <see cref="Int32.MaxValue"/> if successful, otherwise it will return -1.
+        /// </returns>
+        private static int CreateRaid(DateTimeOffset offset, string description)
+        {
+            //Find an available ID
+            int raidID = GetNextAvailableRaidID();
+
+            //Catch any exceptions
+            try
+            {
+                //Check that the ID is valid
+                Debug.Assert(raidID > 0, "Couldn't get a valid raid ID");
+
+                //Determine the folder name
+                var name = $"raid_{offset.ToUnixTimeSeconds()}_{raidID}";
+
+                //Create directory for the raid
+                var dir = Directory.CreateDirectory($"./raids/{name}/");
+
+                //Check that it was created
+                Debug.Assert(dir.Exists, "Couldn't create raid directory");
+
+                //Create the initial roster file
+                using (FileStream fs = File.Open($@"./raids/{name}/roster.txt", FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    //Get a UTF8 encoded text stream
+                    using (StreamWriter sw = new StreamWriter(fs, Encoding.UTF8))
+                    {
+                        //Write description
+                        sw.WriteLine(description);
+                    }
+                }
+
+                //Return success
+                return raidID;
+            }
+            catch (Exception ex)
+            {
+                //Log error
+                Logger.Log(LOG_LEVEL.ERROR, ex.Message);
+
+                //Return failure
+                return -1;
+            }
+        }
+
+        /// <summary>
+        /// Appends a raider to the raid roster.
+        /// Note: Changes to role will simply be documented with a later entry to the file.
+        /// Shouldn't be an issue.
+        /// </summary>
+        /// <param name="raidID">The ID of the raid.</param>
+        /// <param name="userID">The user's unique ID on Discord.</param>
+        /// <param name="roles">A space-separated list of roles in upper-case.</param>
+        /// <returns>Returns whether the operation was successful or not.</returns>
+        private static bool AppendRaider(int raidID, UInt64 userID, string roles)
+        {
+            //Catch any errors
+            try
+            {
+                //Find the correct raid folder
+                var raid = EnumerateRaids().Where(r => r.raidID == raidID).First();
+
+                //Keep trying until we succeed
+                Utility.WithRetry((retryNum) =>
+                {
+                    //Sleep between retries
+                    if (retryNum > 0) Thread.Sleep(100);
+
+                    //Catch IO errors thrown when we can't get exclusive access
+                    try
+                    {
+                        //Get an exclusive handle to the file
+                        using (FileStream fs = File.Open($@"./raids/{raid.fullName}/roster.txt", FileMode.Append, FileAccess.Write, FileShare.None))
+                        {
+                            //Get a UTF8 encoded text stream
+                            using (StreamWriter sw = new StreamWriter(fs, Encoding.UTF8))
+                            {
+                                //Append raider
+                                sw.WriteLine($"{userID} - {roles}");
+                            }
+                        }
+
+                        //Return success
+                        return true;
+                    }
+                    catch (IOException ex)
+                    {
+                        //Check that it's not some other error
+                        Debug.Assert(ex.HResult == -2147024864, "Unexpected IO exception.");
+
+                        //Return failure
+                        return false;
+                    }
+                }, 10);
+
+                //Return success
+                return true;
+            }
+            catch (Exception ex)
+            {
+                //Log error
+                Logger.Log(LOG_LEVEL.ERROR, ex.Message);
+
+                //Return failure
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Reads the generated raid composition for a given raid.
+        /// </summary>
+        /// <param name="raidID">The ID of the raid.</param>
+        /// <returns>An array containing the user IDs of the people in the raid.</returns>
+        private static UInt64[] ReadRaidComp(int raidID)
+        {
+            //Catch any errors
+            try
+            {
+                //Find the correct raid folder
+                var raid = EnumerateRaids().Where(r => r.raidID == raidID).First();
+
+                //Prepare the string to hold the contents
+                string s = "";
+
+                //Keep trying until we succeed
+                Utility.WithRetry((retryNum) =>
+                {
+                    //Sleep between retries
+                    if (retryNum > 0) Thread.Sleep(100);
+
+                    //Catch IO errors thrown when we can't get exclusive access
+                    try
+                    {
+                        //Get an exclusive handle to the file
+                        using (FileStream fs = File.Open($@"./raids/{raid.fullName}/comp.txt", FileMode.Open, FileAccess.Read, FileShare.None))
+                        {
+                            //Get a UTF8 encoded text stream
+                            using (StreamReader sr = new StreamReader(fs, Encoding.UTF8))
+                            {
+                                //Read everything in the file
+                                s = sr.ReadToEnd();
+                            }
+                        }
+
+                        //Return success
+                        return true;
+                    }
+                    catch (IOException ex)
+                    {
+                        //Check that it's not some other error
+                        Debug.Assert(ex.HResult == -2147024864, "Unexpected IO exception.");
+
+                        //Return failure
+                        return false;
+                    }
+                }, 10);
+
+                //Return composition
+                return Utility.GetLines(s)                         //Extract lines
+                              .Select  (line => ulong.Parse(line)) //Parse each line
+                              .ToArray ();                         //Get array;
+            }
+            catch (Exception ex)
+            {
+                //Log error
+                Logger.Log(LOG_LEVEL.ERROR, ex.Message);
+
+                //Return failure
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Removes old raid files.
+        /// </summary>
+        /// <param name="maxAge">
+        /// The allowed age before the file is removed.
+        /// Starts counting after start of raid.
+        /// </param>
+        private static void CleanRaidFiles(TimeSpan maxAge)
+        {
+            //Get current time in UTC+0
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            //Find the raids we want to delete
+            EnumerateRaids().Where(r =>
+            {
+                //Calculate age in seconds
+                var age = (now - r.timestamp);
+
+                //Wrap age in a TimeSpan object
+                var t = TimeSpan.FromTicks(TimeSpan.TicksPerSecond * age);
+
+                //Keep only old raids
+                return t > maxAge;
+            }).ToList().ForEach(r =>
+            {
+                //Try deleting directory (with contents)
+                Debug.Try(() => Directory.Delete($@"./raids/{r.fullName}", true));
+            });
+        }
+
+        /* Nice C# wrapper for spooky unsafe C stuff */
+
+        private static Raider[] MakeRaidComp(Raider[] roster)
+        {
+            //Prepare our pointer to the unmanaged array of C_Raiders
+            IntPtr ptr = IntPtr.Zero;
+
+            //Catch any errors
+            try
+            {
+                //Allocate our unmanaged array
+                ptr = Marshal.AllocHGlobal(Marshal.SizeOf<C_Raider>() * roster.Length);
+
+                //Allocate managed array for our C# roster
+                Raider[] comp = new Raider[10];
+
+                //Begin our unsafe section
+                unsafe
+                {
+                    //Cast to C_Raider pointer
+                    C_Raider* cRoster = (C_Raider*) ptr;
+
+                    //Iterate over our roster
+                    for (int i = 0; i < roster.Length; i++)
+                    {
+                        //Copy userID
+                        cRoster[i].userID = roster[i].ID;
+
+                        //Copy roles
+                        cRoster[i].role = (roster[i].HasRole("MES")   ? (int)C_Roles.MES   : 0) |
+                                          (roster[i].HasRole("HEAL")  ? (int)C_Roles.HEAL  : 0) |
+                                          (roster[i].HasRole("DPS")   ? (int)C_Roles.DPS   : 0) |
+                                          (roster[i].HasRole("SLAVE") ? (int)C_Roles.SLAVE : 0);
+
+                        //Calculate bias based on order of joining
+                        float bias = (float)Math.Pow((roster.Length - i) / (float)roster.Length, 0.1);
+
+                        //Calculate preferences and put them into an array
+                        cRoster[i].weights[(int)C_RoleWeight.MES_WEIGHT]   = roster[i].GetPreference("MES")   * bias;
+                        cRoster[i].weights[(int)C_RoleWeight.HEAL_WEIGHT]  = roster[i].GetPreference("HEAL")  * bias;
+                        cRoster[i].weights[(int)C_RoleWeight.DPS_WEIGHT]   = roster[i].GetPreference("DPS")   * bias;
+                        cRoster[i].weights[(int)C_RoleWeight.SLAVE_WEIGHT] = roster[i].GetPreference("SLAVE") * bias;
+                    }
+
+                    //Call our C function
+                    C_Comp* cComp = make_raid_comp(cRoster, (uint)roster.Length);
+
+                    //Check that it's not null
+                    if (cComp != null)
+                    {
+                        //Iterate over the userIDs
+                        for (int i = 0; i < 10; i++)
+                        {
+                            //Check that it's not 0
+                            if (cComp->userID[i] != 0)
+                            {
+                                //Find the Raider that matches the id
+                                Raider r = null;
+                                for (int j = 0; j < roster.Length; j++)
+                                {
+                                    if (roster[j].ID == cComp->userID[i])
+                                    {
+                                        r = roster[j];
+                                        break;
+                                    }
+                                }
+
+                                //Insert raider
+                                comp[i] = r;
+                            }
+                            else
+                            {
+                                //Insert null
+                                comp[i] = null;
+                            }
+                        }
+
+                        //Free the C array
+                        free_comp(cComp);
+
+                        //Return composition
+                        return comp;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                //Log error
+                Logger.Log(LOG_LEVEL.ERROR, ex.Message);
+            }
+            finally
+            {
+                //Release the memory
+                if (ptr != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(ptr);
+                }
+            }
+
+            //Return null
+            return null;
+        }
+
+        private void SendDM(ulong userID, string text)
+        {
+            //Create DM channel
+            client.GetUser(userID).GetOrCreateDMChannelAsync()
+            .ContinueWith((t) =>
+            {
+                //Send message
+                t.Result.SendMessageAsync(text).GetAwaiter().GetResult();
+            }, TaskContinuationOptions.OnlyOnRanToCompletion).GetAwaiter().GetResult();
+        }
+
+        private void QueueImportantMessage(ulong userID, string text)
+        {
+            //Lock to prevent race conditions
+            lock (this.importantMessageLock)
+            {
+                //Insert message into list
+                this.importantMessages.Add(new QueuedMessage { userID = userID, text = text });
+            }
+
+            //Catch any exceptions
+            try
+            {
+                //Launch a thread that tries to send the message within 5 seconds
+                var tokenSource = new CancellationTokenSource();
+                var token       = tokenSource.Token;
+                var task        = Task.Run(() =>
+                {
+                    //Grab the thread handle
+                    var thread = Thread.CurrentThread;
+
+                    //Set it to abort when cancellation is requested
+                    using (token.Register(thread.Abort))
+                    {
+                        //Check if we're connected
+                        while (this.client.ConnectionState != ConnectionState.Connected) Thread.Sleep(100);
+
+                        //Send the message
+                        this.SendDM(userID, text);
+                    }
+                }, token);
+
+                //Allow 5 seconds for the message to be sent
+                tokenSource.CancelAfter(5000);
+                task.Wait(token);
+            }
+            catch (AggregateException ae)
+            {
+                //Get errors
+                ae.Handle((ex) =>
+                {
+                    //Log error
+                    Logger.Log(LOG_LEVEL.ERROR, ex.Message);
+
+                    //Mark as handled
+                    return true;
+                });
+            }
+            catch (Exception ex)
+            {
+                //Log error
+                Logger.Log(LOG_LEVEL.ERROR, ex.Message);
+            }
+        }
+
+        private void ResendImportantMessages()
+        {
+            //Acquire a lock to prevent race conditions
+            QueuedMessage[] messages = null;
+            lock (this.importantMessageLock)
+            {
+                //Just stop if there are no messages
+                if (this.importantMessages.Count == 0) return;
+
+                //Make a local copy of the messages
+                messages = new QueuedMessage[this.importantMessages.Count];
+                this.importantMessages.CopyTo(messages);
+            }
+
+            //Catch any exceptions
+            try
+            {
+                //Launch a thread that attempts to send as many as possible within 5 seconds
+                var tokenSource = new CancellationTokenSource();
+                var token       = tokenSource.Token;
+                var task        = Task.Factory.StartNew(() =>
+                {
+                    //Grab the thread handle
+                    var thread = Thread.CurrentThread;
+
+                    //Set it to abort when cancellation is requested
+                    using (token.Register(thread.Abort))
+                    {
+                        //Iterate over messages
+                        for (int i = 0; i < messages.Length; i++)
+                        {
+                            //Send the message
+                            this.SendDM(messages[i].userID, messages[i].text);
+                        }
+                    }
+                }, token);
+
+                //Allow 5 seconds for the messages to be sent
+                tokenSource.CancelAfter(5000);
+                task.Wait(token);
+            }
+            catch (AggregateException ae)
+            {
+                //Get errors
+                ae.Handle((ex) =>
+                {
+                    //Log error
+                    Logger.Log(LOG_LEVEL.ERROR, ex.Message);
+
+                    //Mark as handled
+                    return true;
+                });
+            }
+            catch (Exception ex)
+            {
+                //Log error
+                Logger.Log(LOG_LEVEL.ERROR, ex.Message);
+            }
+        }
+
+        public void StartNotificationsCheck()
+        {
+            //Launch monitor thread
+            var monitor = Task.Factory.StartNew(async () =>
+            {
+                begin:
+
+                //TODO: Remove all of this crap and rely on Discord.NET?
+
+                //Catch any errors
+                try
+                {
+                    //Launch work thread
+                    var thread = await Task.Factory.StartNew(async () =>
+                    {
+                        //Begin heartbeat
+                        var heartbeat        = true;
+                        var heartbeatChannel = await client.GetUser(this.ownerID).GetOrCreateDMChannelAsync();
+                        var heartbeatMsg     = await heartbeatChannel.SendMessageAsync("Heartbeat: .");
+
+                        //Define our delta time
+                        var dt = TimeSpan.FromSeconds(30);
+
+                        //Get current time
+                        var now = DateTime.UtcNow;
+
+                        //Get the time for next check
+                        var next = now + dt;
+
+                        //Loop forever
+                        while (true)
+                        {
+                            //Resend any important messages
+                            this.ResendImportantMessages();
+
+                            //TODO: Thread safety
+                            //Check if we need to notify anyone
+                            var list = this.raidCalendar.CheckReminders(now, next);
+                            if ((list?.Count ?? 0) > 0)
+                            {
+                                Logger.Log(LOG_LEVEL.INFO, "NOTIFYING " + list.Count + " USER(S).");
+
+                                //Iterate over notifications
+                                foreach (var notification in list)
+                                {
+                                    Logger.Log(LOG_LEVEL.INFO, "LAUNCHING THREAD!");
+
+                                    //TODO: Just have one thread, use a semaphore, sort notifications and just iterate through them
+                                    //Launch a thread that notifies the user at the right time
+                                    var task = Task.Run(async () =>
+                                    {
+                                        await this.NotifyUser
+                                        (
+                                            notification.raidID, notification.userID,
+                                            notification.time,   notification.hours,
+                                            notification.minutes
+                                        );
+                                    });
+                                }
+                            }
+
+                            //Refresh channel
+                            heartbeatChannel = await client.GetUser(this.ownerID).GetOrCreateDMChannelAsync();
+
+                            //Edit message
+                            heartbeat = !heartbeat;
+                            await heartbeatMsg.ModifyAsync((prop) => prop.Content = "Heartbeat: " + (heartbeat ? "." : ". ."));
+
+                            //Wait
+                            var wait = (next - DateTime.UtcNow);
+                            if (wait > TimeSpan.Zero) await Task.Delay(wait);
+
+                            //Update current time
+                            now = next;
+
+                            //Update time for next check
+                            next = DateTime.UtcNow + dt;
+                        }
+                    }, TaskCreationOptions.LongRunning);
+
+                    //Wait
+                    thread.Wait();
+                }
+                catch (AggregateException ae)
+                {
+                    //Get errors
+                    ae.Handle((ex) =>
+                    {
+                        //Log error
+                        Logger.Log(LOG_LEVEL.ERROR, ex.Message);
+
+                        //Mark as handled
+                        return true;
+                    });
+                }
+                catch (Exception ex)
+                {
+                    //Log error
+                    Logger.Log(LOG_LEVEL.ERROR, ex.Message);
+                }
+
+                //Wait one second
+                Thread.Sleep(1000);
+
+                //Restart
+                Logger.Log(LOG_LEVEL.INFO, "Restarting notification checker.");
+                goto begin;
+            }, TaskCreationOptions.LongRunning).GetAwaiter().GetResult()
+            //Capture exit
+            .ContinueWith((t) =>
+            {
+                //Get errors
+                t?.Exception?.Handle((ex) =>
+                {
+                    //Log error
+                    Logger.Log(LOG_LEVEL.ERROR, ex.Message);
+
+                    //Mark as handled
+                    return true;
+                });
+
+                //Log exit
+                Logger.Log(LOG_LEVEL.ERROR, "Notification checker exited!");
+            });
+        }
+
+        private async Task NotifyUser(int raidID, ulong userID, DateTime alarm, int hours, int minutes)
+        {
+            Logger.Log(LOG_LEVEL.INFO, "Notifying user #" + userID + " in " + (int)(alarm - DateTime.UtcNow).TotalSeconds + " seconds.");
+            
+            //Try to find a recommended role
+            string role = null;
+            try
+            {
+                //Generate comp
+                Raider[] comp = this.GenerateComp(raidID, out var unused);
+                
+                //Iterate over comp
+                for (int i = 0; i < 10; i++)
+                {
+                    //Check if it's the right user
+                    if ((comp[i]?.ID ?? 0) == userID)
+                    {
+                        //Save the role
+                        role = (i < 2) ? "MES" : ((i < 4) ? "HEAL" : ((i < 8) ? "DPS" : "SLAVE"));
+                    }
+                }
+            }
+            catch { }
+
+            //Format hours and minutes
+            var time = Utility.FormatTime(hours, minutes);
+
+            //Wait for right time
+            var wait = alarm - DateTime.UtcNow;
+            if (wait > TimeSpan.Zero) await Task.Delay(wait);
+
+            //Try to send the message
+            try
+            {
+                Logger.Log(LOG_LEVEL.INFO, "Notifying user #" + userID + ".");
+
+                //Setup notification text
+                var text = (string.IsNullOrWhiteSpace(time) ?
+                            "The raid has started." :
+                            "The raid starts in " + time + ".") +
+                            ((!string.IsNullOrWhiteSpace(role)) ?
+                            "\nYour suggested role is **" + role + "**." : "");
+
+                //Queue message
+                this.QueueImportantMessage(userID, text);
+            }
+            catch { }
+        }
+
+        private string CmdRaidCreate(SocketUserMessage msg, int day, int month, int hours, int minutes, char sign, int utc, string desc)
+        {
+            //Apply sign to timezone
+            int timezone = ((sign == '+') ? 1 : -1) * utc;
+
+            //Find out if the event is this year or next year
+            var now  = DateTime.UtcNow;
+            int year = now.Year;
+            if ((month < now.Month) || (month == now.Month && day < now.Day)) year++;
+
+            //Create raid event
+            int id = this.raidCalendar.CreateRaid(day, month, year, hours, minutes, timezone, desc, msg.Author.Id);
+
+            //Save raid calendar
+            RaidCalendar.SaveToFile(this.raidCalendar, RAID_CALENDAR_FILE);
+
+            //Return success
+            return "A raid has been created with ID " + id + " for the "  + day + Utility.GetOrdinal(day) +
+                    " of " + Utility.GetMonth(month) + " " + year + " at " +
+                    Utility.PadNum(hours) + ":" + Utility.PadNum(minutes)  +
+                    " " + Utility.RenderTimezone(timezone) + "\n\"" + desc + "\"";
+        }
+
+        private string CmdRaidCreateTodayOrTomorrow(SocketUserMessage msg, string day, int hours, int minutes, char sign, int utc, string desc)
+        {
+            //Look up the correct day
+            DateTime eventDate = DateTime.UtcNow;
+            if (day == "tomorrow") eventDate += new TimeSpan(1, 0, 0, 0);
+
+            //Pass on to the full implementation
+            return this.CmdRaidCreate(msg, eventDate.Day, eventDate.Month, hours, minutes, sign, utc, desc);
+        }
+
+        private string CmdRaidCreateHelp(SocketUserMessage _)
+        {
+            return "The syntax for \"$raid create\" is \"$raid create [DD/MM HH:MM UTC±HH Description]\".\n" +
+                   "For example: \"$raid create 01/01 20:00 UTC+1 Fun raids with Arnoud!\".\n" +
+                   "You can also replace DD/MM with simply \"today\" or \"tomorrow\".\n" +
+                   "For example: \"$raid create tomorrow 20:00 UTC+1 Arnoud stepping on mines!\"\n" +
+                   "If you don't know what Arnoud's current timezone is, or what the current " +
+                   "server time (UTC+0) is, you can use the \"$time\" command.";
+        }
+
+        private string CmdRaidDelete(SocketUserMessage msg, int raidID)
+        {
+            //Try to delete the raid event
+            if (this.raidCalendar.DeleteRaid(raidID, msg.Author.Id))
+            {
+                //Save raid calendar
+                RaidCalendar.SaveToFile(this.raidCalendar, RAID_CALENDAR_FILE);
+
+                //Return with success
+                return "Raid was deleted.";
+            }
+
+            //Return with failure
+            return "A raid with that ID either does not exist, or you are not the owner.";
+        }
+
+        private string CmdRaidDeleteHelp(SocketUserMessage _)
+        {
+            return "To delete a raid you must provide the ID given to you when it was created.\n" +
+                   "If you do not remember it, use \"$raid list\" to find it.\n" +
+                   "You can then delete the raid like so: \"$raid delete [ID]\"\n" +
+                   "For example \"$raid delete 123\".";
+        }
+
+        private string CmdRaidRosterFilter(SocketUserMessage msg, int raidID, string filter)
+        {
+            //Get the roles
+            string[] roles = Utility.GetRoles(filter);
+
+            //Check that we got at least one
+            if (roles != null)
+            {
+                //Try to get roster
+                if (this.raidCalendar.ListRaiders(raidID, roles, out string roster, out int rosterCount))
+                {
+                    //Check if it's empty
+                    if (rosterCount == 0)
+                    {
+                        //Return empty
+                        return "No raiders matched your query.";
+                    }
+
+                    //Return roster
+                    return "These are the people that matched your query:\n" + roster + "Count: " + rosterCount;
+                }
+
+                //Return error
+                return "No raid with ID \"" + raidID + "\" found.";
+            }
+
+            //Use the normal roster function
+            return this.CmdRaidRoster(msg, raidID);
+        }
+
+        private string CmdRaidRoster(SocketUserMessage _, int raidID)
+        {
+            //Try to get roster
+            if (this.raidCalendar.ListRaiders(raidID, out string roster, out int rosterCount))
+            {
+                //Check if it's empty
+                if (rosterCount == 0)
+                {
+                    //Return empty
+                    return "The roster is empty.";
+                }
+
+                //Return roster
+                return "These are the people signed up:\n" + roster + "Count: " + rosterCount;
+            }
+
+            //Return error
+            return "No raid with ID \"" + raidID + "\" found.";
+        }
+
+        private string CmdRaidRosterHelp(SocketUserMessage _)
+        {
+            return "To display the list of people signed up for a raid you must provide the ID for the raid.\n" +
+                   "If you do not know the ID, type \"$raid list\" to find it.\n" +
+                   "You can then display the roster like so: \"$raid roster [ID]\"\n" +
+                   "For example: \"$raid roster 123\".\n" +
+                   "You can also filter it based on roles by writing one or more of MES, HEAL, DPS or SLAVE at the end.\n" +
+                   "For example: \"$raid roster 123 MES HEAL\".";
+        }
+
+        private string CmdRaidList(SocketUserMessage _)
+        {
+            //Generate the list of events
+            string events = this.raidCalendar.ListRaidEvents();
+
+            //Check that it's not empty
+            if (!string.IsNullOrWhiteSpace(events))
+            {
+                //Return the list
+                return "These are the raids being organised right now:\n" + events;
+            }
+                
+            //Return none
+            return "There are no planned raids right now.";
+        }
+
+        private string CmdRaidJoin(SocketUserMessage msg, int raidID, string roleList)
+        {
+            //Get the roles
+            string[] roles = Utility.GetRoles(roleList);
+
+            //Check that we got at least one
+            if (roles != null)
+            {
+                //Get the username/nickname
+                string name = (msg.Author as SocketGuildUser)?.Nickname ?? msg.Author.Username;
+
+                //Try to add to the raid
+                if (this.raidCalendar.AddRaider(raidID, msg.Author.Id, name, roles))
+                {
+                    //Save raid calendar
+                    RaidCalendar.SaveToFile(this.raidCalendar, RAID_CALENDAR_FILE);
+
+                    //Return success
+                    return "You were added to the raid with these roles: \"" + string.Join(", ", roles) + "\".";
+                }
+                else
+                {
+                    //Return error
+                    return "No raid with ID \"" + raidID + "\" found. Type \"$raid list\" if you need to find the ID.";
+                }
+            }
+            else
+            {
+                //Return error
+                return "No roles provided. Type \"$raid join\" if you need help with this command.";
+            }
+        }
+
+        private string CmdRaidJoinSimple(SocketUserMessage msg, string roleList)
+        {
+            //Check if there is at least one raid being organised right now
+            if (this.raidCalendar.GetNumberOfRaidEvents() > 0)
+            {
+                //Get the ID for the first event
+                int raidID = this.raidCalendar.GetFirstEvent().ID;
+
+                //Pass on to the full implementation
+                return this.CmdRaidJoin(msg, raidID, roleList);
+            }
+
+            //Return error
+            return "There are no raids being organised right now.";
+        }
+
+        private string CmdRaidJoinHelp(SocketUserMessage _)
+        {
+            return "To join a raid you must provide the ID for the raid and your available roles.\n" +
+                   "The roles are DPS, SLAVE, HEAL and MES. You can provide them in any order (for example " +
+                   "in order of preference) separated by spaces, commas or any other symbol.\n" +
+                   "For example: \"$raid join 123 HEAL DPS MES\". It is not case-sensitive.\n" +
+                   "If you wish to add or remove a role, simply type the command again with a new list.\n" +
+                   "If you do not know the ID for the raid, type \"$raid list\" to find it.\n" +
+                   "**You can omit the id to simply join the first raid.**";
+        }
+
+        private string CmdRaidLeave(SocketUserMessage msg, int raidID)
+        {
+            //Try to remove from the raid
+            if (this.raidCalendar.RemoveRaider(raidID, msg.Author.Id))
+            {
+                //Save raid calendar
+                RaidCalendar.SaveToFile(this.raidCalendar, RAID_CALENDAR_FILE);
+
+                //Return success
+                return "You were removed from the roster.\n";
+            }
+
+            //Return failure
+            return "Couldn't find you in a raid with that ID (" + raidID + ").";
+        }
+
+        private string CmdRaidLeaveHelp(SocketUserMessage _)
+        {
+            return "To leave a raid you must provide the ID for the raid you wish to leave.\n" +
+                   "If you do not remember the ID, type \"$raid list\" to find it.\n" +
+                   "You can then type \"$raid leave [ID]\"\n" + 
+                   "For example: \"$raid leave 123\"";
+        }
+
+        private string CmdRaidNotify(SocketUserMessage msg, string notification)
+        {
+            //Get the hours and minutes
+            var times = Utility.GetClockTimes(notification);
+                
+            //Check that it's not null
+            if (times != null)
+            {
+                //Prepare result string
+                string ret    = "You will be notified";
+                string indent = " ";
+                if (times.Count > 1)
+                {
+                    ret   += "\n";
+                    indent = "\t";
+                }
+
+                //Get each clock time
+                int n = 0;
+                var reminders = new Reminder[times.Count];
+                foreach (Tuple<int, int> clock in times)
+                {
+                    //Get hours and minutes
+                    int hours   = clock.Item1;
+                    int minutes = clock.Item2;
+
+                    //Insert reminder
+                    reminders[n++] = new Reminder(msg.Author.Id, hours, minutes);
+
+                    //Check if hours and minutes are zero
+                    if (hours == 0 && minutes == 0)
+                    {
+                        //Insert simplified message
+                        ret += indent + "when the raid starts.\n";
+                    }
+                    else
+                    {
+                        //Format hours and minutes
+                        var time = indent + Utility.FormatTime(hours, minutes);
+
+                        //Insert message
+                        ret += time + " before the raid.\n";
+                    }
+                }
+
+                //Add reminders to calendar
+                this.raidCalendar.AddReminders(reminders);
+
+                //Save raid calendar
+                RaidCalendar.SaveToFile(this.raidCalendar, RAID_CALENDAR_FILE);
+
+                //Return resulting message
+                return ret;
+            }
+
+            //Return error
+            return "The times must be given in a HH:MM format.\n" +
+                   "Type \"$raid notify\" for more info.";
+        }
+
+        private string CmdRaidNotifyRemove(SocketUserMessage msg)
+        {
+            //Remove notification
+            this.raidCalendar.RemoveReminders(msg.Author.Id);
+
+            //Save raid calendar
+            RaidCalendar.SaveToFile(this.raidCalendar, RAID_CALENDAR_FILE);
+
+            //Reply with success
+            return "You will no longer be notified before a raid.";
+        }
+
+        private string CmdRaidNotifyHelp(SocketUserMessage _)
+        {
+            return "If you wish to be notified before a raid you've signed up for, " +
+                   "provide the hours and minutes before the raid you wish to be notified " +
+                   "separated by a colon.\n" +
+                   "For example: \"$raid notify 01:00\".\n" +
+                   "You can use the command again to change it.\n" +
+                   "If you no longer wish to be notified, simply type \"remove\" " +
+                   "instead of hours and minutes.\n" +
+                   "Like so: \"$raid notify remove\"";
+        }
+
+        private Raider[] GenerateComp(int raidID, out List<Raider> unused)
+        {
+            //Try to get the raiders
+            var raiders = this.raidCalendar.GetRaiders(raidID);
+            var tmp = new List<Raider>();
+
+            //Check that there is at least one
+            if ((raiders?.Count ?? 0) > 0)
+            {
+                //Pass a copy of the raider list to our solver
+                var comp = MakeRaidComp(raiders.ToArray());
+
+                //Check if anyone is not included
+                foreach (Raider r in raiders)
+                {
+                    if (r != null && !Array.Exists(comp, e => r.ID == e?.ID)) tmp.Add(r);
+                }
+
+                //Return the composition + unused list
+                unused = tmp;
+                return comp;
+            }
+
+            //Return failure
+            unused = tmp;
+            return null;
+        }
+
+        private string CmdRaidMakeComp(SocketUserMessage _, int raidID)
+        {
+            //Generate composition
+            var bestComp = this.GenerateComp(raidID, out var unused);
+                
+            //Check that it's not null
+            if (bestComp != null)
+            {
+                //Return the comp
+                return "This is the best comp I could make:\n" +
+                    "MES:   " + (bestComp[0]?.nick ?? "<empty>") + ", " + (bestComp[1]?.nick ?? "<empty>") + "\n" +
+                    "HEAL:  " + (bestComp[2]?.nick ?? "<empty>") + ", " + (bestComp[3]?.nick ?? "<empty>") + "\n" +
+                    "DPS:   " + (bestComp[4]?.nick ?? "<empty>") + ", " + (bestComp[5]?.nick ?? "<empty>") + "\n" +
+                    "DPS:   " + (bestComp[6]?.nick ?? "<empty>") + ", " + (bestComp[7]?.nick ?? "<empty>") + "\n" +
+                    "SLAVE: " + (bestComp[8]?.nick ?? "<empty>") + ", " + (bestComp[9]?.nick ?? "<empty>") + 
+                    
+                    (unused.Count > 0 ? "\n\nNot included:\n" + string.Join('\n', unused.Select(e => e.nick)) : string.Empty);
+            }
+
+            //Return failure
+            return "Cannot create a comp for raid with that ID (" + raidID + ").\n" +
+                   "There either are no raiders for it or there was an error.";
+        }
+
+        private string CmdRaidMakeCompSimple(SocketUserMessage msg)
+        {
+            //Check if there is at least one raid being organised right now
+            if (this.raidCalendar.GetNumberOfRaidEvents() > 0)
+            {
+                //Get the ID for the first event
+                int raidID = this.raidCalendar.GetFirstEvent().ID;
+
+                //Pass on to the full implementation
+                return this.CmdRaidMakeComp(msg, raidID);
+            }
+
+            //Return error
+            return "There are no raids being organised right now.";
+        }
+
+        private string CmdRaidMakeCompTest(SocketUserMessage msg)
+        {
+            //Check if there is at least one raid being organised right now
+            if (this.raidCalendar.GetNumberOfRaidEvents() > 0)
+            {
+                //Get the ID for the first event
+                int raidID = this.raidCalendar.GetFirstEvent().ID;
+
+                var result = this.raidCalendar.GetRaiders(raidID).Select((r) =>
+                {
+                    CPP_User user;
+                    user.userID = r.ID;
+
+                    unsafe
+                    {
+                        user.weights[0] = user.weights[1] = user.weights[2] = user.weights[3] = user.weights[4] = 0.0f;
+                        if (r.HasRole("MES")) user.weights[0] = 1.0f;
+                        if (r.HasRole("HEAL")) user.weights[1] = 1.0f;
+                        if (r.HasRole("DPS")) user.weights[2] = 1.0f;
+                        if (r.HasRole("SLAVE")) user.weights[3] = 1.0f;
+
+                        if (r.roles[0].Equals("MES")) user.weights[0] += 0.5f;
+                        if (r.roles[0].Equals("HEAL")) user.weights[1] += 0.5f;
+                        if (r.roles[0].Equals("DPS")) user.weights[2] += 0.5f;
+                        if (r.roles[0].Equals("SLAVE")) user.weights[3] += 0.5f;
+                    }
+
+                    return user;
+                }).ToArray();
+
+                CPP_Idk[] output = new CPP_Idk[10];
+
+                unsafe
+                {
+                    CPP_User* arr = (CPP_User*)Marshal.AllocHGlobal(sizeof(CPP_User) * result.Length);
+                    CPP_Idk* arr2 = (CPP_Idk*)Marshal.AllocHGlobal(sizeof(CPP_Idk) * 10);
+
+                    for (int i = 0; i < result.Length; i++)
+                    {
+                        fixed(float* f = result[i].weights)
+                        {
+                            System.Console.WriteLine("Adding user " + result[i].userID + " | " + *f);
+                        }
+                        
+                        arr[i] = result[i];
+                    }
+                    
+                    solve_default(arr, result.Length, arr2);
+
+                    for (int i = 0; i < 10; i++) output[i] = arr2[i];
+
+                    Marshal.FreeHGlobal((IntPtr)arr);
+                    Marshal.FreeHGlobal((IntPtr)arr2);
+                }
+
+                return string.Join(", ", output.Select((x) => x.userID));
+            }
+
+            //Return error
+            return "There are no raids being organised right now.";
+        }
+
+        private string CmdRaidMakeCompHelp(SocketUserMessage _)
+        {
+            return "To auto-generate a raid composition you need to provide the ID of the raid.\n" +
+                   "If you do not know the ID, type \"$raid list\" to find it.\n" +
+                   "You can then type \"$raid make comp [ID]\"\n" +
+                   "For example: \"$raid make comp 123\"\n" +
+                   "**You can omit the id to simply select the first raid.**";
+        }
+
+        private string CmdRaidHelp(SocketUserMessage _)
+        {
+            return Bot.CmdRaidHelp();
+        }
+
+        private static string CmdRaidHelp()
+        {
+            return "These are the raid commands available:\n" +
+                   "    $raid create [DD/MM HH:MM UTC±HH Description]\n" +
+                   "    $raid delete [ID]\n" +
+                   "    $raid roster [ID]\n" +
+                   "    $raid list\n" +
+                   "    $raid join [ID Roles]\n" +
+                   "    $raid leave [ID]\n" +
+                   "    $raid notify [HH:MM]\n" +
+                   "    $raid make comp [ID]\n" +
+                   "    $raid help\n" +
+                   "\n" +
+                   "To setup a raid, use the \"$raid create\" command. If you need to remove it again, " +
+                   "use the \"$raid delete\" command with the ID you were given (Only the creator can do this). " +
+                   "To see who has signed up for the raid, you can use the \"$raid roster\" command with the raid ID.\n" +
+                   "If you're looking for a raid to join, then use the \"$raid list\" command to display " +
+                   "available raids. You can then join with \"$raid join\" using the ID provided by the " +
+                   "previous command. The \"Roles\" are DPS, SLAVE, HEAL and MES. Feel free to list them in " +
+                   "order of preference, separated by whatever symbol you want (or just spaces). " +
+                   "If you cannot join afterall, use the \"$raid leave\" command with the raid's ID.\n" +
+                   "If you want to be notified before the raid, you can use the \"$raid notify\" command " +
+                   "followed by the hours and minutes (in HH:MM format) before the raid you wish to be notified.\n" +
+                   "To get a group composition auto-generated by the bot, you can use the \"$raid make comp\" " +
+                   "command with the ID for the raid.\n" +
+                   "To see this message again, type \"$raid help\" or just \"$raid\".\n" +
+                   "Pro-tip: You can also whisper me (Left click me and type your command).";
+        }
+
+        private RaidCalendar        raidCalendar;
+        private List<QueuedMessage> importantMessages;
+        private object              importantMessageLock = new object();
+    }
+}
