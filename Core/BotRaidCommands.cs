@@ -276,7 +276,7 @@ namespace DiscordBot.Core
             public float weight;
         }
 
-        [DllImport("/root/test/billy_herrington.so")]
+        [DllImport("/root/libherrington/billy_herrington.so")]
         private static unsafe extern void solve(uint idx, CPP_User* users, int length, CPP_Idk* output);
 
         /* End of spooky unsafe C stuff */
