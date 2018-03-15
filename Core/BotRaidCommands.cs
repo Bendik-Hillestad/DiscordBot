@@ -276,14 +276,8 @@ namespace DiscordBot.Core
             public float weight;
         }
 
-        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private unsafe delegate void SolverFunc(CPP_User* users, int length, CPP_Idk* output);
-
         [DllImport("/root/test/billy_herrington.so")]
-        private static unsafe extern void solve_default(CPP_User* users, int length, CPP_Idk* output);
-
-        [DllImport("/root/test/billy_herrington.so")]
-        private static extern IntPtr get_function();
+        private static unsafe extern void solve(uint idx, CPP_User* users, int length, CPP_Idk* output);
 
         /* End of spooky unsafe C stuff */
 
@@ -1367,8 +1361,6 @@ namespace DiscordBot.Core
                 //Get the ID for the first event
                 int raidID = this.raidCalendar.GetFirstEvent().ID;
 
-                var solver = Marshal.GetDelegateForFunctionPointer<SolverFunc>(get_function());
-
                 var result = this.raidCalendar.GetRaiders(raidID).Select((r) =>
                 {
                     CPP_User user;
@@ -1408,8 +1400,7 @@ namespace DiscordBot.Core
                         arr[i] = result[i];
                     }
 
-                    solver(arr, result.Length, arr2);
-                    //solve_default(arr, result.Length, arr2);
+                    solve(0, arr, result.Length, arr2);
 
                     for (int i = 0; i < 10; i++) output[i] = arr2[i];
 
