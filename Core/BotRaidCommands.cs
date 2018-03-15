@@ -170,14 +170,6 @@ namespace DiscordBot.Core
                 (
                     new Command
                     (
-                        "make", this, "CmdRaidMakeCompTest", "CmdRaidMakeCompHelp",
-                        "test", @"test(?:$|\s)"
-                    )
-                )
-                .RegisterCommand
-                (
-                    new Command
-                    (
                         "help", this, "CmdRaidHelp", null
                     )
                 )
@@ -213,7 +205,7 @@ namespace DiscordBot.Core
 
         /* Spooky unsafe C stuff */
 
-        enum C_Roles : Int32
+        /*enum C_Roles : Int32
         {
             MES   = 1,
 	        HEAL  = 2,
@@ -254,9 +246,9 @@ namespace DiscordBot.Core
         private static unsafe extern C_Comp* make_raid_comp(C_Raider* roster, uint count);
 
         [DllImport("CppUtils")]
-        private static unsafe extern void free_comp(C_Comp* comp);
+        private static unsafe extern void free_comp(C_Comp* comp);*/
 
-        [StructLayout(LayoutKind.Explicit)]
+        [StructLayout(LayoutKind.Explicit, Pack = 8, Size = 32)]
         unsafe struct CPP_User
         {
             [FieldOffset(0)]
@@ -266,7 +258,7 @@ namespace DiscordBot.Core
             public fixed float weights[5];
         };
 
-        [StructLayout(LayoutKind.Explicit)]
+        [StructLayout(LayoutKind.Explicit, Pack = 8, Size = 16)]
         unsafe struct CPP_Idk
         {
             [FieldOffset(0)]
@@ -573,7 +565,69 @@ namespace DiscordBot.Core
 
         /* Nice C# wrapper for spooky unsafe C stuff */
 
-        private static Raider[] MakeRaidComp(Raider[] roster)
+        private static Raider[] MakeRaidComp(IEnumerable<Raider> raiders)
+        {
+            Raider[] output = new Raider[10];
+
+            var result = raiders.Select((r) =>
+            {
+                CPP_User user;
+                user.userID = r.ID;
+
+                unsafe
+                {
+                    user.weights[0] = user.weights[1] = user.weights[2] = user.weights[3] = user.weights[4] = 0.0f;
+                    if (r.HasRole("MES")) user.weights[0] = 1.0f;
+                    if (r.HasRole("HEAL")) user.weights[1] = 1.0f;
+                    if (r.HasRole("DPS")) user.weights[2] = 1.0f;
+                    if (r.HasRole("SLAVE")) user.weights[3] = 1.0f;
+                    if (r.HasRole("KITER")) user.weights[4] = 1.0f;
+
+                    if (r.roles[0].Equals("MES")) user.weights[0] += 0.5f;
+                    if (r.roles[0].Equals("HEAL")) user.weights[1] += 0.5f;
+                    if (r.roles[0].Equals("DPS")) user.weights[2] += 0.5f;
+                    if (r.roles[0].Equals("SLAVE")) user.weights[3] += 0.5f;
+                    if (r.roles[0].Equals("KITER")) user.weights[4] += 0.5f;
+                }
+
+                return user;
+            }).ToArray();
+
+            unsafe
+            {
+                CPP_User* arr = (CPP_User*)Marshal.AllocHGlobal(sizeof(CPP_User) * result.Length);
+                CPP_Idk* arr2 = (CPP_Idk*)Marshal.AllocHGlobal(sizeof(CPP_Idk) * 10);
+
+                for (int i = 0; i < result.Length; i++)
+                {
+                    arr[i] = result[i];
+                }
+
+                solve(0, arr, result.Length, arr2);
+
+                for (int i = 0; i < 10; i++)
+                {
+                    if (arr2[i].userID != 0)
+                    {
+                        foreach (var r in raiders)
+                        {
+                            if (arr2[i].userID == r.ID)
+                            {
+                                output[i] = r;
+                            }
+                        }
+                    }
+                    else output[i] = null;
+                }
+
+                Marshal.FreeHGlobal((IntPtr)arr);
+                Marshal.FreeHGlobal((IntPtr)arr2);
+            }
+
+            return output;
+        }
+
+        /*private static Raider[] MakeRaidComp(Raider[] roster)
         {
             //Prepare our pointer to the unmanaged array of C_Raiders
             IntPtr ptr = IntPtr.Zero;
@@ -672,7 +726,7 @@ namespace DiscordBot.Core
 
             //Return null
             return null;
-        }
+        }*/
 
         private void SendDM(ulong userID, string text)
         {
@@ -1323,11 +1377,12 @@ namespace DiscordBot.Core
             {
                 //Return the comp
                 return "This is the best comp I could make:\n" +
-                    "MES:   " + (bestComp[0]?.nick ?? "<empty>") + ", " + (bestComp[1]?.nick ?? "<empty>") + "\n" +
-                    "HEAL:  " + (bestComp[2]?.nick ?? "<empty>") + ", " + (bestComp[3]?.nick ?? "<empty>") + "\n" +
-                    "DPS:   " + (bestComp[4]?.nick ?? "<empty>") + ", " + (bestComp[5]?.nick ?? "<empty>") + "\n" +
-                    "DPS:   " + (bestComp[6]?.nick ?? "<empty>") + ", " + (bestComp[7]?.nick ?? "<empty>") + "\n" +
-                    "SLAVE: " + (bestComp[8]?.nick ?? "<empty>") + ", " + (bestComp[9]?.nick ?? "<empty>") + 
+                    "MES:\n    "   + (bestComp[0]?.nick ?? "<empty>") + ", " + (bestComp[1]?.nick ?? "<empty>") + "\n" +
+                    "HEAL:\n    "  + (bestComp[2]?.nick ?? "<empty>") + ", " + (bestComp[3]?.nick ?? "<empty>") + "\n" +
+                    "DPS:\n    "   + (bestComp[4]?.nick ?? "<empty>") + ", " + (bestComp[5]?.nick ?? "<empty>") + "\n" +
+                    "    "         + (bestComp[6]?.nick ?? "<empty>") + ", " + (bestComp[7]?.nick ?? "<empty>") + "\n" +
+                    "    "         + (bestComp[8]?.nick ?? "<empty>") +                                           "\n" +
+                    "SLAVE:\n    " + (bestComp[9]?.nick ?? "<empty>") + 
                     
                     (unused.Count > 0 ? "\n\nNot included:\n" + string.Join('\n', unused.Select(e => e.nick)) : string.Empty);
             }
@@ -1347,68 +1402,6 @@ namespace DiscordBot.Core
 
                 //Pass on to the full implementation
                 return this.CmdRaidMakeComp(msg, raidID);
-            }
-
-            //Return error
-            return "There are no raids being organised right now.";
-        }
-
-        private string CmdRaidMakeCompTest(SocketUserMessage msg)
-        {
-            //Check if there is at least one raid being organised right now
-            if (this.raidCalendar.GetNumberOfRaidEvents() > 0)
-            {
-                //Get the ID for the first event
-                int raidID = this.raidCalendar.GetFirstEvent().ID;
-
-                var result = this.raidCalendar.GetRaiders(raidID).Select((r) =>
-                {
-                    CPP_User user;
-                    user.userID = r.ID;
-
-                    unsafe
-                    {
-                        user.weights[0] = user.weights[1] = user.weights[2] = user.weights[3] = user.weights[4] = 0.0f;
-                        if (r.HasRole("MES")) user.weights[0] = 1.0f;
-                        if (r.HasRole("HEAL")) user.weights[1] = 1.0f;
-                        if (r.HasRole("DPS")) user.weights[2] = 1.0f;
-                        if (r.HasRole("SLAVE")) user.weights[3] = 1.0f;
-
-                        if (r.roles[0].Equals("MES")) user.weights[0] += 0.5f;
-                        if (r.roles[0].Equals("HEAL")) user.weights[1] += 0.5f;
-                        if (r.roles[0].Equals("DPS")) user.weights[2] += 0.5f;
-                        if (r.roles[0].Equals("SLAVE")) user.weights[3] += 0.5f;
-                    }
-
-                    return user;
-                }).ToArray();
-
-                CPP_Idk[] output = new CPP_Idk[10];
-
-                unsafe
-                {
-                    CPP_User* arr = (CPP_User*)Marshal.AllocHGlobal(sizeof(CPP_User) * result.Length);
-                    CPP_Idk* arr2 = (CPP_Idk*)Marshal.AllocHGlobal(sizeof(CPP_Idk) * 10);
-
-                    for (int i = 0; i < result.Length; i++)
-                    {
-                        fixed(float* f = result[i].weights)
-                        {
-                            System.Console.WriteLine("Adding user " + result[i].userID + " | " + *f);
-                        }
-                        
-                        arr[i] = result[i];
-                    }
-
-                    solve(0, arr, result.Length, arr2);
-
-                    for (int i = 0; i < 10; i++) output[i] = arr2[i];
-
-                    Marshal.FreeHGlobal((IntPtr)arr);
-                    Marshal.FreeHGlobal((IntPtr)arr2);
-                }
-
-                return string.Join(", ", output.Select((x) => x.userID));
             }
 
             //Return error
