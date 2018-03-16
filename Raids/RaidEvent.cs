@@ -113,10 +113,10 @@ namespace DiscordBot.Raids
             }
         }
 
-        public void AddRaider(ulong userID, string nick, string[] roles)
+        public void AddRaider(ulong userID, string nick, IEnumerable<string> roles, bool backup)
         {
             //Create raider
-            Raider r = new Raider(userID, nick, roles);
+            Raider r = new Raider(userID, nick, roles, backup);
 
             //Check if already in the group
             if (IsInGroup(r))
@@ -178,7 +178,7 @@ namespace DiscordBot.Raids
             return null;
         }
 
-        public string RenderRoster(string[] filter, out int rosterCount)
+        public string RenderRoster(List<string> filter, out int rosterCount)
         {
             //Check if there are any raiders
             if (this.roster.Count > 0)
@@ -191,8 +191,8 @@ namespace DiscordBot.Raids
                 foreach (Raider r in this.roster)
                 {
                     //Check if the raider has one of the roles we're looking for
-                    string[] temp = r.roles.Intersect<string>(filter).ToArray();
-                    if ((temp?.Length ?? 0) > 0)
+                    var temp = r.roles.Intersect(filter);
+                    if ((temp?.Count() ?? 0) > 0)
                     {
                         //Append index, nick and roles
                         ret += $"{count + 1} - " + r.nick + " - " + string.Join(", ", r.roles) + "\n";

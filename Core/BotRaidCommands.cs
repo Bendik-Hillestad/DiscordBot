@@ -576,18 +576,19 @@ namespace DiscordBot.Core
 
                 unsafe
                 {
+                    float bu = r.IsBackup() ? 2.0f : 1.0f;
                     user.weights[0] = user.weights[1] = user.weights[2] = user.weights[3] = user.weights[4] = 0.0f;
-                    if (r.HasRole("MES")) user.weights[0] = 1.0f;
-                    if (r.HasRole("HEAL")) user.weights[1] = 1.0f;
-                    if (r.HasRole("DPS")) user.weights[2] = 1.0f;
-                    if (r.HasRole("SLAVE")) user.weights[3] = 1.0f;
-                    if (r.HasRole("KITER")) user.weights[4] = 1.0f;
+                    if (r.HasRole("MES")) user.weights[0] = 1.0f / bu;
+                    if (r.HasRole("HEAL")) user.weights[1] = 1.0f / bu;
+                    if (r.HasRole("DPS")) user.weights[2] = 1.0f / bu;
+                    if (r.HasRole("SLAVE")) user.weights[3] = 1.0f / bu;
+                    if (r.HasRole("KITER")) user.weights[4] = 1.0f / bu;
 
-                    if (r.roles[0].Equals("MES")) user.weights[0] += 0.5f;
-                    if (r.roles[0].Equals("HEAL")) user.weights[1] += 0.5f;
-                    if (r.roles[0].Equals("DPS")) user.weights[2] += 0.5f;
-                    if (r.roles[0].Equals("SLAVE")) user.weights[3] += 0.5f;
-                    if (r.roles[0].Equals("KITER")) user.weights[4] += 0.5f;
+                    if (r.roles[0].Equals("MES")) user.weights[0] += 0.5f / bu;
+                    if (r.roles[0].Equals("HEAL")) user.weights[1] += 0.5f / bu;
+                    if (r.roles[0].Equals("DPS")) user.weights[2] += 0.5f / bu;
+                    if (r.roles[0].Equals("SLAVE")) user.weights[3] += 0.5f / bu;
+                    if (r.roles[0].Equals("KITER")) user.weights[4] += 0.5f / bu;
                 }
 
                 return user;
@@ -1098,7 +1099,7 @@ namespace DiscordBot.Core
         private string CmdRaidRosterFilter(SocketUserMessage msg, int raidID, string filter)
         {
             //Get the roles
-            string[] roles = Utility.GetRoles(filter);
+            var roles = Utility.GetRoles(filter);
 
             //Check that we got at least one
             if (roles != null)
@@ -1151,7 +1152,7 @@ namespace DiscordBot.Core
                    "If you do not know the ID, type \"$raid list\" to find it.\n" +
                    "You can then display the roster like so: \"$raid roster [ID]\"\n" +
                    "For example: \"$raid roster 123\".\n" +
-                   "You can also filter it based on roles by writing one or more of MES, HEAL, DPS or SLAVE at the end.\n" +
+                   "You can also filter it based on roles by writing one or more of MES, HEAL, DPS, SLAVE or KITER at the end.\n" +
                    "For example: \"$raid roster 123 MES HEAL\".";
         }
 
@@ -1174,22 +1175,33 @@ namespace DiscordBot.Core
         private string CmdRaidJoin(SocketUserMessage msg, int raidID, string roleList)
         {
             //Get the roles
-            string[] roles = Utility.GetRoles(roleList);
+            var roles = Utility.GetRoles(roleList);
+            bool bu = false;
+
+            //Check if one of the roles is BACKUP
+            if (roles.Contains("BACKUP"))
+            {
+                //Set flag
+                bu = true;
+
+                //Remove role from array
+                roles.Remove("BACKUP");
+            }
 
             //Check that we got at least one
-            if (roles != null)
+            if (roles != null && !(roles.Count == 1 && bu))
             {
                 //Get the username/nickname
                 string name = (msg.Author as SocketGuildUser)?.Nickname ?? msg.Author.Username;
 
                 //Try to add to the raid
-                if (this.raidCalendar.AddRaider(raidID, msg.Author.Id, name, roles))
+                if (this.raidCalendar.AddRaider(raidID, msg.Author.Id, name, roles, bu))
                 {
                     //Save raid calendar
                     RaidCalendar.SaveToFile(this.raidCalendar, RAID_CALENDAR_FILE);
 
                     //Return success
-                    return "You were added to the raid with these roles: \"" + string.Join(", ", roles) + "\".";
+                    return $"You were added to the raid{(bu ? " as backup" : "")} with these roles: \"{string.Join(", ", roles)}\".";
                 }
                 else
                 {
@@ -1223,7 +1235,7 @@ namespace DiscordBot.Core
         private string CmdRaidJoinHelp(SocketUserMessage _)
         {
             return "To join a raid you must provide the ID for the raid and your available roles.\n" +
-                   "The roles are DPS, SLAVE, HEAL and MES. You can provide them in any order (for example " +
+                   "The roles are DPS, SLAVE, HEAL, MES and KITER. You can provide them in any order (for example " +
                    "in order of preference) separated by spaces, commas or any other symbol.\n" +
                    "For example: \"$raid join 123 HEAL DPS MES\". It is not case-sensitive.\n" +
                    "If you wish to add or remove a role, simply type the command again with a new list.\n" +
