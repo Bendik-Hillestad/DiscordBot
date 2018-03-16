@@ -1189,7 +1189,7 @@ namespace DiscordBot.Core
             }
 
             //Check that we got at least one
-            if (roles != null && !(roles.Count == 1 && bu))
+            if (roles != null && roles.Count > 0)
             {
                 //Get the username/nickname
                 string name = (msg.Author as SocketGuildUser)?.Nickname ?? msg.Author.Username;
