@@ -1,16 +1,19 @@
-﻿using System;
+﻿using System.Linq;
+using System.Collections.Generic;
 using System.Runtime.Serialization;
+using System.ComponentModel;
 
 namespace DiscordBot.Raids
 {
     [DataContract]
     public sealed class Raider
     {
-        public Raider(ulong userID, string nick, string[] roles)
+        public Raider(ulong userID, string nick, IEnumerable<string> roles, bool backup)
         {
-            this.ID    = userID;
-            this.nick  = nick;
-            this.roles = roles;
+            this.ID     = userID;
+            this.nick   = nick;
+            this.roles  = roles.ToArray();
+            this.backup = backup;
         }
 
         public bool HasRole(string role)
@@ -29,7 +32,12 @@ namespace DiscordBot.Raids
             return false;
         }
 
-        public float GetPreference(string role)
+        public bool IsBackup()
+        {
+            return this.backup;
+        }
+
+        /*public float GetPreference(string role)
         {
             //Check if we don't have the role
             if (!this.HasRole(role)) return 0.0f;
@@ -46,7 +54,7 @@ namespace DiscordBot.Raids
 
             //Return the score
             return pref;
-        }
+        }*/
 
         [DataMember(Name = "ID")]
         public ulong ID;
@@ -54,5 +62,7 @@ namespace DiscordBot.Raids
         public string nick;
         [DataMember(Name = "roles")]
         public string[] roles;
+        [DataMember(Name = "backup"), DefaultValue(false)]
+        public bool backup;
     }
 }

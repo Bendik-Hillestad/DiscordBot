@@ -226,10 +226,10 @@ namespace DiscordBot.Utils
             return time;
         }
 
-        public static string[] GetRoles(string s)
+        public static List<string> GetRoles(string s)
         {
             //Find roles
-            MatchCollection matches = Regex.Matches(s, @"DPS|SLAVE|HEAL|MES", RegexOptions.IgnoreCase);
+            MatchCollection matches = Regex.Matches(s, @"DPS|SLAVE|HEAL|MES|KITER|BACKUP", RegexOptions.IgnoreCase);
 
             //Check if there are no matches
             if (matches.Count == 0) return null;
@@ -245,7 +245,7 @@ namespace DiscordBot.Utils
             }
 
             //Remove duplicates and return
-            return roleList.Distinct().ToArray();
+            return roleList.Distinct().ToList();
         }
 
         public static string Indent(string text, string indent = "\t")

@@ -106,7 +106,7 @@ namespace DiscordBot.Raids
             return false;
         }
 
-        public bool ListRaiders(int raidID, string[] filter, out string roster, out int rosterCount)
+        public bool ListRaiders(int raidID, List<string> filter, out string roster, out int rosterCount)
         {
             //Iterate over raid events
             foreach (RaidEvent e in this.raidEvents)
@@ -128,7 +128,7 @@ namespace DiscordBot.Raids
             return false;
         }
 
-        public bool AddRaider(int raidID, ulong userID, string nick, string[] roles)
+        public bool AddRaider(int raidID, ulong userID, string nick, IEnumerable<string> roles, bool backup)
         {
             //Iterate over raid events
             foreach (RaidEvent e in this.raidEvents)
@@ -137,7 +137,7 @@ namespace DiscordBot.Raids
                 if (e.ID == raidID)
                 {
                     //Add to roster
-                    e.AddRaider(userID, nick, roles);
+                    e.AddRaider(userID, nick, roles, backup);
 
                     //Return success
                     return true;
