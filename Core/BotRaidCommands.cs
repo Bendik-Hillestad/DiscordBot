@@ -1179,7 +1179,7 @@ namespace DiscordBot.Core
             bool bu = false;
 
             //Check if one of the roles is BACKUP
-            if (roles.Contains("BACKUP"))
+            if (roles?.Contains("BACKUP") ?? false)
             {
                 //Set flag
                 bu = true;
@@ -1189,7 +1189,7 @@ namespace DiscordBot.Core
             }
 
             //Check that we got at least one
-            if (roles != null && roles.Count > 0)
+            if ((roles?.Count ?? 0) > 0)
             {
                 //Get the username/nickname
                 string name = (msg.Author as SocketGuildUser)?.Nickname ?? msg.Author.Username;
