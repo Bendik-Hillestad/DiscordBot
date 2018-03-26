@@ -113,7 +113,7 @@ namespace DiscordBot.Raids
                 code += "\n";
 
                 //Emit the template
-                code += "#include \"implementation_template\"\n";
+                code += "#include \"implementation_template.h\"\n";
 
                 //End the namespace for this comp
                 code += "};\n";
