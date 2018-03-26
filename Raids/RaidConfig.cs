@@ -16,7 +16,6 @@ namespace DiscordBot.Raids
     {
         public static RaidConfig DefaultConfig = new RaidConfig
         {
-            Roles        = new List<string> { "MES", "HEAL", "DPS", "SLAVE" },
             Compositions = new List<CompDescription>
             {
                 new CompDescription
@@ -31,7 +30,6 @@ namespace DiscordBot.Raids
             }
         };
 
-        public List<string>          Roles        { get; set; }
         public List<CompDescription> Compositions { get; set; }
 
         public static RaidConfig ReadConfig()
@@ -59,12 +57,6 @@ namespace DiscordBot.Raids
 
             //Add composition description
             this.Compositions.Add(description);
-
-            //Update role list
-            this.Roles = this.Compositions
-                             .Select   ((desc) => desc.Layout.Distinct())
-                             .Aggregate((i, j) => i.Union(j))
-                             .ToList   ();
         }
 
         public void SaveConfig()
@@ -84,90 +76,134 @@ namespace DiscordBot.Raids
             }
         }
 
-        public void GenerateSolverDLL()
+        public void GenerateSolverLibrary()
         {
-            //TODO
-        }
+            //Calculate unique roles
+            var roles = this.Compositions
+                            .Select   ((desc) => desc.Layout.Distinct())
+                            .Aggregate((i, j) => i.Union(j))
+                            .ToList   ();
 
-        public void GenerateImplementationsHeader()
-        {
-            //Grab the composition names
-            var compNames = this.Compositions.Select((c) => c.Name);
+            //Prepare the string to hold the final code
+            string code = "";
 
-            //Prepare the text
-            var str = $"#ifndef BILLY_HERRINGTON_IMPLEMENTATIONS_H\n" +
-                      $"#define BILLY_HERRINGTON_IMPLEMENTATIONS_H\n" +
-                      $"#pragma once\n" +
-                      $"\n" +
-                      $"namespace billy_herrington\n" +
-                      $"{{\n" +
-                      $"    enum class Implementation : unsigned int\n" +
-                      $"    {{\n" +
-                      $"        {string.Join(",\n        ", compNames)},\n" +
-                      $"        COUNT\n" +
-                      $"    }};\n" +
-                      $"}};\n" +
-                      $"\n" +
-                      $"#endif\n";
+            //Emit our includes
+            code += "#include \"platform.h\"\n" +
+                    "#include \"typelist.h\"\n" +
+                    "#include \"solver.h\"\n\n" +
+                    "#include <cstring>\n\n";
 
-            //Write to file
-            File.WriteAllText("implementations.h", str);
-        }
+            //Begin our implementation namespace
+            code += "namespace billy_herrington::impl {\n";
 
-        public void GenerateSolverCPP(/*CompDescription compDescription*/)
-        {
-            var str = "#include \"typelist.h\"\n" +
-                      "#include \"solver.h\"\n" +
-                      "#include \"registry.h\"\n" +
-                      "#include \"implementations.h\"\n" +
-                      "\n" +
-                      "#include <cstring>\n" +
-                      "\n" +
-                      "using namespace billy_herrington;\n" +
-                      "\n" +
-                      "/* Configuration */\n" +
-                      "\n" +
-                      "struct MES;\n" +
-                      "struct HEAL;\n" +
-                      "struct DPS;\n" +
-                      "struct SLAVE;\n" +
-                      "struct KITER;\n" +
-                      "\n" +
-                      "using roles       = tl::typelist_t<MES, HEAL, DPS, SLAVE, KITER>;\n" +
-                      "using composition = tl::typelist_t\n" +
-                      "<\n" +
-                      "    MES, HEAL, DPS, DPS, SLAVE,\n" +
-                      "    MES, HEAL, DPS, DPS,\n" +
-                      "    KITER\n" +
-                      ">;\n" +
-                      "\n" +
-                      "using solver_config = comp_solver::solver_config<roles, composition>;\n" +
-                      "using solver        = comp_solver::solver       <solver_config>;\n" +
-                      "\n" +
-                      "/* Specialized implementation */\n" +
-                      "\n" +
-                      "void solve_dhuum\n" +
-                      "(\n" +
-                      "    solver_config::roster_t::const_pointer roster, int length,\n" +
-                      "    solver_config::comp_t::pointer output\n" +
-                      ") noexcept\n" +
-                      "{\n" +
-                      "    //Create the solver\n" +
-                      "    solver s{ roster, length };\n" +
-                      "\n" +
-                      "    //Solve it!\n" +
-                      "    s.solve();\n" +
-                      "\n" +
-                      "    //Write solution to the output\n" +
-                      "    std::memcpy(output, s.get_solution().data(), sizeof(solver_config::comp_t));\n" +
-                      "}\n" +
-                      "\n" +
-                      "/* Registering */\n" +
-                      "\n" +
-                      "static bool r = registry::register_function(Implementation::DHUUM, reinterpret_cast<registry::solver_func>(&solve_dhuum));\n";
+            //Emit our roles
+            code += string.Join("\n", roles.Select((r) => $"struct {r};"));
+            code += "\n\n";
+            code += $"using roles = tl::typelist_t<{string.Join(",", roles)}>;\n";
+            code += "\n";
 
-            //Write to file
-            File.WriteAllText("solver_dhuum.cpp", str);
+            //Iterate through the different compositions
+            foreach (var comp in this.Compositions)
+            {
+                //Begin the namespace for this comp
+                code += $"namespace {comp.Name} {{\n";
+
+                //Emit the composition layout
+                code += $"using composition = tl::typelist_t<{string.Join(",", comp.Layout)}>;\n";
+                code += "\n";
+
+                //Emit the template
+                code += "#include \"implementation_template\"\n";
+
+                //End the namespace for this comp
+                code += "};\n";
+            }
+
+            //End the implementation namespace
+            code += "};\n\n";
+
+            //Begin our public API
+            code += "BILLY_HERRINGTON_API void solve(unsigned int impl, void* roster, int length, void* output) {\n";
+            code += "using namespace billy_herrington::impl;\n\n";
+
+            //Begin the switch
+            code += "switch (impl) {\n";
+
+            //Iterate through the different compositions
+            int n = 0;
+            foreach (var comp in this.Compositions)
+            {
+                //Begin the case
+                code += $"case {n}: {{\n";
+
+                //Emit the function call
+                code += $"{comp.Name}::solve" +
+                         "(" +
+                            $"static_cast<{comp.Name}::solver_config::roster_t::const_pointer>(roster), " +
+                             "length, " +
+                            $"static_cast<{comp.Name}::solver_config::comp_t::pointer>(output)" +
+                         ");\n";
+
+                //End the case
+                code += "} break;\n\n";
+
+                //Increment the counter
+                n++;
+            }
+
+            //End the switch
+            code += "default: UNREACHABLE;\n";
+            code += "}\n";
+
+            //End the public API
+            code += "}\n\n";
+
+            //Begin our compiler guard
+            code += "#if defined(_MSC_VER) && !(defined(__c2__) || defined(__clang__) || defined(__GNUC__))\n";
+            code += "\n";
+
+            //Emit the entry-point
+            code += "#define WIN32_LEAN_AND_MEAN\n" +
+                    "#define VC_EXTRALEAN\n" +
+                    "#include <windows.h>\n" +
+                    "\n" +
+                    "BOOL APIENTRY DllMain(HMODULE, DWORD, LPVOID) {\n" +
+                        "return TRUE;\n" +
+                    "}\n\n";
+
+            //End the compiler guard
+            code += "#endif\n";
+
+            //Create the source file
+            File.WriteAllText("dllmain.cpp", code);
+
+            //For easier debugging, format the text
+#           if DEBUG
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName               = "clang-format",
+                Arguments              = "-style=file " +
+                                         "-i " +
+                                         "dllmain.cpp",
+                UseShellExecute        = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError  = true
+            });
+#           endif
+
+            //Compile the code
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName               = "clang",
+                Arguments              = "-std=c++17 -fPIC -shared -fno-exceptions -O3 " +
+                                         "-march=native -fvisibility=hidden -fvisibility-inlines-hidden " +
+                                         "-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic " +
+                                         "-Wno-missing-prototypes dllmain.cpp " +
+                                         "libherrington.so",
+                UseShellExecute        = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError  = true
+            });
         }
     }
 }
