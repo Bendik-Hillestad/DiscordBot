@@ -1516,7 +1516,7 @@ namespace DiscordBot.Core
             return "You need to provide the roles in the composition!";
         }
 
-        private string CmdCreateCompHelp()
+        private string CmdRaidCreateCompHelp()
         {
             return "You did something wrong. Uh ask Grim for help, atm I'm too lazy to have a good help message.";
         }
