@@ -568,7 +568,7 @@ namespace DiscordBot.Core
                 //Write the id into the array
                 Marshal.WriteInt64(offset, (long)r.ID);
                 var next = offset + userSize;
-                offset  += sizeof(float) * roles.Count;
+                offset  += sizeof(ulong);
 
                 //Iterate through the roles
                 roles.ForEach((role) =>
@@ -578,7 +578,7 @@ namespace DiscordBot.Core
 
                     //Write the weight into the array
                     Marshal.WriteInt32(offset, BitConverter.SingleToInt32Bits(weight));
-                    offset -= sizeof(float);
+                    offset += sizeof(float);
                 });
 
                 //Update offset
