@@ -1411,14 +1411,15 @@ namespace DiscordBot.Core
                                              {
                                                  //Add raider
                                                  tmp.Add(bestComp[offset + i].nick);
-                                             } 
+                                             }
+                                             else tmp.Add("<empty>");
                                          }
 
                                          //Update offset
                                          offset += val.Value;
 
                                          //Push the names into the string
-                                         return output + ((tmp.Count > 0) ? string.Join(", ", tmp) : "<empty>");
+                                         return output + string.Join(", ", tmp);
                                      })
                                      .Aggregate((s1, s2) => s1 + "\n" + s2);
 
