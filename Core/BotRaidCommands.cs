@@ -228,49 +228,6 @@ namespace DiscordBot.Core
 
         /* Spooky unsafe C stuff */
 
-        /*enum C_Roles : Int32
-        {
-            MES   = 1,
-	        HEAL  = 2,
-	        DPS   = 4,
-	        SLAVE = 8,
-	        Count = 4
-        }
-
-        enum C_RoleWeight : Int32
-        {
-	        MES_WEIGHT = 0,
-	        HEAL_WEIGHT,
-	        DPS_WEIGHT,
-	        SLAVE_WEIGHT
-        };
-
-        [StructLayout(LayoutKind.Explicit)]
-        unsafe struct C_Raider
-        {
-            [FieldOffset(0)]
-            public UInt64 userID;
-
-            [FieldOffset(8)]
-            public Int32 role;
-
-            [FieldOffset(12)]
-            public fixed float weights[(int)C_Roles.Count];
-        }
-
-        [StructLayout(LayoutKind.Explicit)]
-        unsafe struct C_Comp
-        {
-            [FieldOffset(0)]
-            public fixed ulong userID[10];
-        }
-
-        [DllImport("CppUtils")]
-        private static unsafe extern C_Comp* make_raid_comp(C_Raider* roster, uint count);
-
-        [DllImport("CppUtils")]
-        private static unsafe extern void free_comp(C_Comp* comp);*/
-
         [StructLayout(LayoutKind.Explicit, Pack = 8, Size = 32)]
         unsafe struct CPP_User
         {
@@ -292,7 +249,7 @@ namespace DiscordBot.Core
         }
 
         [DllImport("libherrington")]
-        private static unsafe extern void solve(uint idx, CPP_User* users, int length, CPP_Idk* output);
+        private static extern void solve(uint idx, IntPtr users, int length, IntPtr output);
 
         /* End of spooky unsafe C stuff */
 
@@ -586,69 +543,76 @@ namespace DiscordBot.Core
             });
         }
 
-        /* Nice C# wrapper for spooky unsafe C stuff */
+        /* Nice C# wrapper for spooky unsafe C++ stuff */
 
-        private static Raider[] MakeRaidComp(IEnumerable<Raider> raiders, uint compIdx)
+        private Raider[] MakeRaidComp(List<Raider> raiders, int compIdx)
         {
-            Raider[] output = new Raider[10];
+            //Get the roles
+            var roles = this.raidConfig.GetRoles();
 
-            var result = raiders.Select((r) =>
+            //Get the size of the composition
+            var compSize  = this.raidConfig.Compositions[compIdx].Layout.Count;
+
+            //Allocate an array to hold the data that we feed into the solver
+            var userSize  = this.raidConfig.GetUserSizeInBytes();
+            var input     = Marshal.AllocHGlobal(userSize * raiders.Count);
+
+            //Allocate an array to hold the output data
+            var blockSize = this.raidConfig.GetOutputBlockSizeInBytes();
+            var output    = Marshal.AllocHGlobal(blockSize * compSize);
+
+            //Iterate through the raiders
+            var offset = input;
+            raiders.ForEach((r) =>
             {
-                CPP_User user;
-                user.userID = r.ID;
+                //Write the id into the array
+                Marshal.WriteInt64(offset, (long)r.ID);
+                var next = offset + userSize;
+                offset  += sizeof(ulong);
 
-                unsafe
+                //Iterate through the roles
+                roles.ForEach((role) =>
                 {
-                    float bu = r.IsBackup() ? 2.0f : 1.0f;
-                    user.weights[0] = user.weights[1] = user.weights[2] = user.weights[3] = user.weights[4] = 0.0f;
-                    if (r.HasRole("MES")) user.weights[0] = 1.0f / bu;
-                    if (r.HasRole("HEAL")) user.weights[1] = 1.0f / bu;
-                    if (r.HasRole("DPS")) user.weights[2] = 1.0f / bu;
-                    if (r.HasRole("SLAVE")) user.weights[3] = 1.0f / bu;
-                    if (r.HasRole("KITER")) user.weights[4] = 1.0f / bu;
+                    //Get the weight
+                    float weight = r.GetRoleWeight(role);
 
-                    if (r.roles[0].Equals("MES")) user.weights[0] += 0.5f / bu;
-                    if (r.roles[0].Equals("HEAL")) user.weights[1] += 0.5f / bu;
-                    if (r.roles[0].Equals("DPS")) user.weights[2] += 0.5f / bu;
-                    if (r.roles[0].Equals("SLAVE")) user.weights[3] += 0.5f / bu;
-                    if (r.roles[0].Equals("KITER")) user.weights[4] += 0.5f / bu;
-                }
+                    //Write the weight into the array
+                    Marshal.WriteInt32(offset, BitConverter.SingleToInt32Bits(weight));
+                    offset += sizeof(float);
+                });
 
-                return user;
-            }).ToArray();
+                //Update offset
+                offset = next;
+            });
 
-            unsafe
+            //Feed values to the solver
+            solve((uint)compIdx, input, raiders.Count, output);
+
+            //Prepare result
+            Raider[] result = new Raider[compSize];
+
+            //Iterate over the output array
+            offset = output;
+            for (int i = 0; i < compSize; i++)
             {
-                CPP_User* arr = (CPP_User*)Marshal.AllocHGlobal(sizeof(CPP_User) * result.Length);
-                CPP_Idk* arr2 = (CPP_Idk*)Marshal.AllocHGlobal(sizeof(CPP_Idk) * 10);
+                //Get the id
+                var id = (ulong)Marshal.ReadInt64(output + (i * blockSize));
 
-                for (int i = 0; i < result.Length; i++)
+                //Check that it's not zero
+                if (id != 0)
                 {
-                    arr[i] = result[i];
+                    //Insert the right raider
+                    result[i] = raiders.Find((r) => id == r.ID);
                 }
-
-                solve(compIdx, arr, result.Length, arr2);
-
-                for (int i = 0; i < 10; i++)
-                {
-                    if (arr2[i].userID != 0)
-                    {
-                        foreach (var r in raiders)
-                        {
-                            if (arr2[i].userID == r.ID)
-                            {
-                                output[i] = r;
-                            }
-                        }
-                    }
-                    else output[i] = null;
-                }
-
-                Marshal.FreeHGlobal((IntPtr)arr);
-                Marshal.FreeHGlobal((IntPtr)arr2);
+                else result[i] = null;
             }
 
-            return output;
+            //Release our unmanaged memory
+            Marshal.FreeHGlobal(input);
+            Marshal.FreeHGlobal(output);
+
+            //Return the result
+            return result;
         }
 
         /*private static Raider[] MakeRaidComp(Raider[] roster)
@@ -1386,7 +1350,7 @@ namespace DiscordBot.Core
                    "Like so: \"$raid notify remove\"";
         }
 
-        private Raider[] GenerateComp(int raidID, uint compIdx, out List<Raider> unused)
+        private Raider[] GenerateComp(int raidID, int compIdx, out List<Raider> unused)
         {
             //Try to get the raiders
             var raiders = this.raidCalendar.GetRaiders(raidID);
@@ -1396,7 +1360,7 @@ namespace DiscordBot.Core
             if ((raiders?.Count ?? 0) > 0)
             {
                 //Pass a copy of the raider list to our solver
-                var comp = MakeRaidComp(raiders.ToArray(), compIdx);
+                var comp = this.MakeRaidComp(raiders, compIdx);
 
                 //Check if anyone is not included
                 foreach (Raider r in raiders)
@@ -1423,21 +1387,39 @@ namespace DiscordBot.Core
             if (compIdx != -1)
             {
                 //Generate composition
-                var bestComp = this.GenerateComp(raidID, (uint)compIdx, out var unused);
-                
+                var bestComp = this.GenerateComp(raidID, compIdx, out var unused);
+
                 //Check that it's not null
                 if (bestComp != null)
                 {
+                    //Generate the textual representation of the comp
+                    var offset = 0;
+                    var text   = this.raidConfig
+                                     .GetRoleCounts(name.ToUpper())
+                                     .Select((val) =>
+                                     {
+                                         //Prepare the string for this role
+                                         var output = $"{val.Key}:\n    ";
+
+                                         //Iterate over the area we we care about for this role
+                                         var tmp = new List<string>();
+                                         for (int i = 0; i < val.Value; i++)
+                                         {
+                                             //Add raider
+                                             tmp.Add(bestComp[offset + i].nick);
+                                         }
+
+                                         //Update offset
+                                         offset += val.Value;
+
+                                         //Push the names into the string
+                                         return output + ((tmp.Count > 0) ? string.Join(", ", tmp) : "<empty>");
+                                     })
+                                     .Aggregate((s1, s2) => s1 + "\n" + s2);
+
                     //Return the comp
-                    return "This is the best comp I could make:\n" +
-                        "MES:\n    "   + (bestComp[0]?.nick ?? "<empty>") + ", " + (bestComp[1]?.nick ?? "<empty>") + "\n" +
-                        "HEAL:\n    "  + (bestComp[2]?.nick ?? "<empty>") + ", " + (bestComp[3]?.nick ?? "<empty>") + "\n" +
-                        "DPS:\n    "   + (bestComp[4]?.nick ?? "<empty>") + ", " + (bestComp[5]?.nick ?? "<empty>") + "\n" +
-                        "    "         + (bestComp[6]?.nick ?? "<empty>") + ", " + (bestComp[7]?.nick ?? "<empty>") + "\n" +
-                        "    "         + (bestComp[8]?.nick ?? "<empty>") +                                           "\n" +
-                        "SLAVE:\n    " + (bestComp[9]?.nick ?? "<empty>") + 
-                    
-                        (unused.Count > 0 ? "\n\nNot included:\n" + string.Join('\n', unused.Select(e => e.nick)) : string.Empty);
+                    return "This is the best comp I could make:\n" + text +
+                          (unused.Count > 0 ? "\n\nNot included:\n" + string.Join('\n', unused.Select(e => e.nick)) : string.Empty);
                 }
 
                 //Return failure

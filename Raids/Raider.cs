@@ -32,6 +32,15 @@ namespace DiscordBot.Raids
             return false;
         }
 
+        public float GetRoleWeight(string role)
+        {
+            //Check if we don't have the role
+            if (this.HasRole(role)) return 0.0f;
+
+            //Return a simple weighting
+            return 1.0f + (string.Equals(role, this.roles[0]) ? 0.5f : 0.0f);
+        }
+
         public bool IsBackup()
         {
             return this.backup;

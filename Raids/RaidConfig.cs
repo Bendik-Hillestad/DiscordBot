@@ -203,7 +203,21 @@ namespace DiscordBot.Raids
             });
         }
 
-        public IEnumerable<string> GetRoles()
+        public List<KeyValuePair<string, int>> GetRoleCounts(string compName)
+        {
+            //Find the comp
+            var comp = this.Compositions.Find((c) => string.Equals(compName, c.Name)).Layout;
+
+            //Count the occurrences of the roles in this comp
+            return this.GetRoles()
+                       .Select  ((r) =>
+                       {
+                           return new KeyValuePair<string, int>(r, comp.Count((s) => string.Equals(r, s)));
+                       })
+                       .ToList();
+        }
+
+        public List<string> GetRoles()
         {
             return this.Compositions
                        .Select   ((desc) => desc.Layout.Distinct())
@@ -211,14 +225,31 @@ namespace DiscordBot.Raids
                        .ToList   ();
         }
 
-        public IEnumerable<string> GetCompNames()
+        public List<string> GetCompNames()
         {
-            return this.Compositions.Select((desc) => desc.Name);
+            return this.Compositions
+                       .Select((desc) => desc.Name)
+                       .ToList();
         }
 
         public int GetCompIndex(string name)
         {
-            return this.Compositions.FindIndex((c) => string.Equals(c.Name, name));
+            return this.Compositions
+                       .FindIndex((c) => string.Equals(c.Name, name));
+        }
+
+        public int GetUserSizeInBytes()
+        {
+            //First calculate the base size
+            var baseSize = sizeof(ulong) + sizeof(float) * this.GetRoles().Count;
+
+            //Add padding so that the total size is some multiple of sizeof(ulong)
+            return (baseSize + sizeof(ulong)) & ~(sizeof(ulong) - 1);
+        }
+
+        public int GetOutputBlockSizeInBytes()
+        {
+            return 16;
         }
     }
 }
