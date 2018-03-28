@@ -1405,8 +1405,12 @@ namespace DiscordBot.Core
                                          var tmp = new List<string>();
                                          for (int i = 0; i < val.Value; i++)
                                          {
-                                             //Add raider
-                                             tmp.Add(bestComp[offset + i].nick);
+                                             //Check that this slot is not empty
+                                             if (bestComp[offset + i] != null)
+                                             {
+                                                 //Add raider
+                                                 tmp.Add(bestComp[offset + i].nick);
+                                             } 
                                          }
 
                                          //Update offset
