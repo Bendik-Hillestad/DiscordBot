@@ -16,9 +16,6 @@ namespace DiscordBot
 
         public async Task Start()
         {
-            Raids.RaidConfig.ReadConfig().GenerateSolverLibrary();
-            return;
-
             //Set output encoding
             Console.OutputEncoding = Encoding.Unicode;
 
