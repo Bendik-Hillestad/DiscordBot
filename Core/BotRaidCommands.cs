@@ -201,6 +201,9 @@ namespace DiscordBot.Core
             //Load raid config
             this.raidConfig = RaidConfig.ReadConfig();
 
+            //Compile
+            this.raidConfig.GenerateSolverLibrary();
+
             //Search for the saved raid calendar
             if (File.Exists(RAID_CALENDAR_FILE))
             {
