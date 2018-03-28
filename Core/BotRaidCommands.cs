@@ -114,7 +114,7 @@ namespace DiscordBot.Core
                     (
                         "join", this, "CmdRaidJoin", "CmdRaidJoinHelp",
                         "ID",    @"(\d+)(?:$|\s)",
-                        "Roles", @"(.+?)$"
+                        "roles", @"(.+?)$"
                     )
                 )
                 .RegisterCommand
@@ -122,7 +122,7 @@ namespace DiscordBot.Core
                     new Command
                     (
                         "join", this, "CmdRaidJoinSimple", "CmdRaidJoinHelp",
-                        "Roles", @"(\D.+?)$"
+                        "roles", @"(\D.+?)$"
                     )
                 )
                 .RegisterCommand
@@ -155,6 +155,7 @@ namespace DiscordBot.Core
                     (
                         "make", this, "CmdRaidMakeComp", "CmdRaidMakeCompHelp",
                         "comp", @"comp(?:$|\s)",
+                        "name", @"(\w+)(?:$|\s)",
                         "ID",   @"(\d+)(?:$|\s)"
                     )
                 )
@@ -163,7 +164,26 @@ namespace DiscordBot.Core
                     new Command
                     (
                         "make", this, "CmdRaidMakeCompSimple", "CmdRaidMakeCompHelp",
+                        "comp", @"comp(?:$|\s)",
+                        "name", @"(\w+)(?:$|\s)"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "make", this, "CmdRaidMakeCompSimplest", "CmdRaidMakeCompHelp",
                         "comp", @"comp(?:$|\s)"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "create", this, "CmdRaidCreateComp", "CmdRaidCreateCompHelp",
+                        "comp",  @"comp(?:$|\s)",
+                        "name",  @"(\w+)(?:$|\s)",
+                        "roles", @"(\D.+?)$"
                     )
                 )
                 .RegisterCommand
@@ -177,6 +197,9 @@ namespace DiscordBot.Core
 
             //Create list to hold important messages
             this.importantMessages = new List<QueuedMessage>();
+
+            //Load raid config
+            this.raidConfig = RaidConfig.ReadConfig();
 
             //Search for the saved raid calendar
             if (File.Exists(RAID_CALENDAR_FILE))
@@ -565,7 +588,7 @@ namespace DiscordBot.Core
 
         /* Nice C# wrapper for spooky unsafe C stuff */
 
-        private static Raider[] MakeRaidComp(IEnumerable<Raider> raiders)
+        private static Raider[] MakeRaidComp(IEnumerable<Raider> raiders, uint compIdx)
         {
             Raider[] output = new Raider[10];
 
@@ -604,7 +627,7 @@ namespace DiscordBot.Core
                     arr[i] = result[i];
                 }
 
-                solve(0, arr, result.Length, arr2);
+                solve(compIdx, arr, result.Length, arr2);
 
                 for (int i = 0; i < 10; i++)
                 {
@@ -989,7 +1012,7 @@ namespace DiscordBot.Core
             try
             {
                 //Generate comp
-                Raider[] comp = this.GenerateComp(raidID, out var unused);
+                Raider[] comp = this.GenerateComp(raidID, 0, out var unused);
                 
                 //Iterate over comp
                 for (int i = 0; i < 10; i++)
@@ -1099,7 +1122,7 @@ namespace DiscordBot.Core
         private string CmdRaidRosterFilter(SocketUserMessage msg, int raidID, string filter)
         {
             //Get the roles
-            var roles = Utility.GetRoles(filter);
+            var roles = this.GetRoles(filter);
 
             //Check that we got at least one
             if (roles != null)
@@ -1172,20 +1195,26 @@ namespace DiscordBot.Core
             return "There are no planned raids right now.";
         }
 
+        private List<string> GetRoles(string roleList)
+        {
+            return Regex.Matches (roleList, @"\D\w+")
+                        .Select  ((r) => r.Value.ToUpper())
+                        .Distinct()
+                        .Where   ((r) => this.raidConfig.GetRoles().Contains(r))
+                        .ToList  ();
+        }
+
         private string CmdRaidJoin(SocketUserMessage msg, int raidID, string roleList)
         {
             //Get the roles
-            var roles = Utility.GetRoles(roleList);
+            var roles = this.GetRoles(roleList);
             bool bu = false;
 
             //Check if one of the roles is BACKUP
-            if (roles?.Contains("BACKUP") ?? false)
+            if (roleList.ToUpper().Contains("BACKUP"))
             {
                 //Set flag
                 bu = true;
-
-                //Remove role from array
-                roles.Remove("BACKUP");
             }
 
             //Check that we got at least one
@@ -1351,7 +1380,7 @@ namespace DiscordBot.Core
                    "Like so: \"$raid notify remove\"";
         }
 
-        private Raider[] GenerateComp(int raidID, out List<Raider> unused)
+        private Raider[] GenerateComp(int raidID, uint compIdx, out List<Raider> unused)
         {
             //Try to get the raiders
             var raiders = this.raidCalendar.GetRaiders(raidID);
@@ -1361,7 +1390,7 @@ namespace DiscordBot.Core
             if ((raiders?.Count ?? 0) > 0)
             {
                 //Pass a copy of the raider list to our solver
-                var comp = MakeRaidComp(raiders.ToArray());
+                var comp = MakeRaidComp(raiders.ToArray(), compIdx);
 
                 //Check if anyone is not included
                 foreach (Raider r in raiders)
@@ -1379,32 +1408,42 @@ namespace DiscordBot.Core
             return null;
         }
 
-        private string CmdRaidMakeComp(SocketUserMessage _, int raidID)
+        private string CmdRaidMakeComp(SocketUserMessage _, string name, int raidID)
         {
-            //Generate composition
-            var bestComp = this.GenerateComp(raidID, out var unused);
-                
-            //Check that it's not null
-            if (bestComp != null)
+            //Find the comp
+            int compIdx = this.raidConfig.GetCompIndex(name.ToUpper());
+
+            //Check that it exists
+            if (compIdx != -1)
             {
-                //Return the comp
-                return "This is the best comp I could make:\n" +
-                    "MES:\n    "   + (bestComp[0]?.nick ?? "<empty>") + ", " + (bestComp[1]?.nick ?? "<empty>") + "\n" +
-                    "HEAL:\n    "  + (bestComp[2]?.nick ?? "<empty>") + ", " + (bestComp[3]?.nick ?? "<empty>") + "\n" +
-                    "DPS:\n    "   + (bestComp[4]?.nick ?? "<empty>") + ", " + (bestComp[5]?.nick ?? "<empty>") + "\n" +
-                    "    "         + (bestComp[6]?.nick ?? "<empty>") + ", " + (bestComp[7]?.nick ?? "<empty>") + "\n" +
-                    "    "         + (bestComp[8]?.nick ?? "<empty>") +                                           "\n" +
-                    "SLAVE:\n    " + (bestComp[9]?.nick ?? "<empty>") + 
+                //Generate composition
+                var bestComp = this.GenerateComp(raidID, (uint)compIdx, out var unused);
+                
+                //Check that it's not null
+                if (bestComp != null)
+                {
+                    //Return the comp
+                    return "This is the best comp I could make:\n" +
+                        "MES:\n    "   + (bestComp[0]?.nick ?? "<empty>") + ", " + (bestComp[1]?.nick ?? "<empty>") + "\n" +
+                        "HEAL:\n    "  + (bestComp[2]?.nick ?? "<empty>") + ", " + (bestComp[3]?.nick ?? "<empty>") + "\n" +
+                        "DPS:\n    "   + (bestComp[4]?.nick ?? "<empty>") + ", " + (bestComp[5]?.nick ?? "<empty>") + "\n" +
+                        "    "         + (bestComp[6]?.nick ?? "<empty>") + ", " + (bestComp[7]?.nick ?? "<empty>") + "\n" +
+                        "    "         + (bestComp[8]?.nick ?? "<empty>") +                                           "\n" +
+                        "SLAVE:\n    " + (bestComp[9]?.nick ?? "<empty>") + 
                     
-                    (unused.Count > 0 ? "\n\nNot included:\n" + string.Join('\n', unused.Select(e => e.nick)) : string.Empty);
+                        (unused.Count > 0 ? "\n\nNot included:\n" + string.Join('\n', unused.Select(e => e.nick)) : string.Empty);
+                }
+
+                //Return failure
+                return "Cannot create a comp for raid with that ID (" + raidID + ").\n" +
+                       "There either are no raiders for it or there was an error.";
             }
 
             //Return failure
-            return "Cannot create a comp for raid with that ID (" + raidID + ").\n" +
-                   "There either are no raiders for it or there was an error.";
+            return "No comp with that name exists. These are the recognised comps: \n" + this.raidConfig.GetCompNames();
         }
 
-        private string CmdRaidMakeCompSimple(SocketUserMessage msg)
+        private string CmdRaidMakeCompSimplest(SocketUserMessage msg, string name)
         {
             //Check if there is at least one raid being organised right now
             if (this.raidCalendar.GetNumberOfRaidEvents() > 0)
@@ -1413,7 +1452,23 @@ namespace DiscordBot.Core
                 int raidID = this.raidCalendar.GetFirstEvent().ID;
 
                 //Pass on to the full implementation
-                return this.CmdRaidMakeComp(msg, raidID);
+                return this.CmdRaidMakeComp(msg, name, raidID);
+            }
+
+            //Return error
+            return "There are no raids being organised right now.";
+        }
+
+        private string CmdRaidMakeCompSimplest(SocketUserMessage msg)
+        {
+            //Check if there is at least one raid being organised right now
+            if (this.raidCalendar.GetNumberOfRaidEvents() > 0)
+            {
+                //Get the ID for the first event
+                int raidID = this.raidCalendar.GetFirstEvent().ID;
+
+                //Pass on to the full implementation
+                return this.CmdRaidMakeComp(msg, "DEFAULT", raidID);
             }
 
             //Return error
@@ -1427,6 +1482,43 @@ namespace DiscordBot.Core
                    "You can then type \"$raid make comp [ID]\"\n" +
                    "For example: \"$raid make comp 123\"\n" +
                    "**You can omit the id to simply select the first raid.**";
+        }
+
+        private string CmdRaidCreateComp(SocketUserMessage msg, string name, string comp)
+        {
+            //Get all the roles (including duplicates)
+            var roles = Regex.Matches(comp, @"\D\w+")
+                             .Select ((r) => r.Value.ToUpper())
+                             .ToList ();
+
+            //Check that at least one was provided
+            if (roles.Count > 0)
+            {
+                //Add the comp description
+                this.raidConfig.AddCompDescription(new CompDescription
+                {
+                    Name   = name.ToUpper(),
+                    Layout = roles
+                });
+
+                //Save and compile
+                bool success = Debug.Try(() =>
+                {
+                    this.raidConfig.SaveConfig();
+                    this.raidConfig.GenerateSolverLibrary();
+                });
+
+                //Return result
+                return success ? "Comp was created." : "There was an error #blamearnoud";
+            }
+
+            //Return error
+            return "You need to provide the roles in the composition!";
+        }
+
+        private string CmdCreateCompHelp()
+        {
+            return "You did something wrong. Uh ask Grim for help, atm I'm too lazy to have a good help message.";
         }
 
         private string CmdRaidHelp(SocketUserMessage _)
@@ -1463,6 +1555,7 @@ namespace DiscordBot.Core
                    "Pro-tip: You can also whisper me (Left click me and type your command).";
         }
 
+        private RaidConfig          raidConfig;
         private RaidCalendar        raidCalendar;
         private List<QueuedMessage> importantMessages;
         private object              importantMessageLock = new object();

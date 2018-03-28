@@ -226,28 +226,6 @@ namespace DiscordBot.Utils
             return time;
         }
 
-        public static List<string> GetRoles(string s)
-        {
-            //Find roles
-            MatchCollection matches = Regex.Matches(s, @"DPS|SLAVE|HEAL|MES|KITER|BACKUP", RegexOptions.IgnoreCase);
-
-            //Check if there are no matches
-            if (matches.Count == 0) return null;
-
-            //Prepare list
-            List<string> roleList = new List<string>();
-
-            //Iterate over matches
-            for (int i = 0; i < matches.Count; i++)
-            {
-                //Make uppercase and insert
-                roleList.Add(matches[i].Value.ToUpper());
-            }
-
-            //Remove duplicates and return
-            return roleList.Distinct().ToList();
-        }
-
         public static string Indent(string text, string indent = "\t")
         {
             //Split into lines

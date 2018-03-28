@@ -79,10 +79,7 @@ namespace DiscordBot.Raids
         public void GenerateSolverLibrary()
         {
             //Calculate unique roles
-            var roles = this.Compositions
-                            .Select   ((desc) => desc.Layout.Distinct())
-                            .Aggregate((i, j) => i.Union(j))
-                            .ToList   ();
+            var roles = this.GetRoles();
 
             //Prepare the string to hold the final code
             string code = "";
@@ -204,6 +201,24 @@ namespace DiscordBot.Raids
                 RedirectStandardOutput = true,
                 RedirectStandardError  = true
             });
+        }
+
+        public IEnumerable<string> GetRoles()
+        {
+            return this.Compositions
+                       .Select   ((desc) => desc.Layout.Distinct())
+                       .Aggregate((i, j) => i.Union(j))
+                       .ToList   ();
+        }
+
+        public IEnumerable<string> GetCompNames()
+        {
+            return this.Compositions.Select((desc) => desc.Name);
+        }
+
+        public int GetCompIndex(string name)
+        {
+            return this.Compositions.FindIndex((c) => string.Equals(c.Name, name));
         }
     }
 }
