@@ -1440,7 +1440,8 @@ namespace DiscordBot.Core
             }
 
             //Return failure
-            return "No comp with that name exists. These are the recognised comps: \n" + this.raidConfig.GetCompNames();
+            return "No comp with that name exists. These are the recognised comps: \n" +
+                   string.Join(", ", this.raidConfig.GetCompNames());
         }
 
         private string CmdRaidMakeCompSimple(SocketUserMessage msg, string name)
