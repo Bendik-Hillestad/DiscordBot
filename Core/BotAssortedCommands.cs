@@ -98,8 +98,8 @@ namespace DiscordBot.Core
             //Get UTC+0
             var utcNow = DateTimeOffset.UtcNow;
 
-            //Check for DST
-            bool dst = DateTime.Now.IsDaylightSavingTime();
+            //FIXME: Check for DST
+            bool dst = true;//DateTime.Now.IsDaylightSavingTime();
 
             //Reliably get the actual time
             var now = utcNow.AddHours(dst ? 2 : 1);
