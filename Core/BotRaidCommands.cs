@@ -1197,10 +1197,16 @@ namespace DiscordBot.Core
 
         private List<string> GetRoles(string roleList)
         {
-            return Regex.Matches (roleList, @"\w+")
+            //Create our regex
+            var regex = this.raidConfig
+                            .GetRoles         ()
+                            .OrderByDescending((s) => s.Length)
+                            .Aggregate        ((s, s2) => s + "|" + s2);
+
+            //Check for matches
+            return Regex.Matches (roleList, regex, RegexOptions.IgnoreCase)
                         .Select  ((r) => r.Value.ToUpper())
                         .Distinct()
-                        .Where   ((r) => this.raidConfig.GetRoles().Contains(r))
                         .ToList  ();
         }
 
