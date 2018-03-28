@@ -548,7 +548,7 @@ namespace DiscordBot.Core
         private Raider[] MakeRaidComp(List<Raider> raiders, int compIdx)
         {
             //Get the roles
-            var roles = this.raidConfig.GetRoles();
+            var roles     = this.raidConfig.GetRoles();
 
             //Get the size of the composition
             var compSize  = this.raidConfig.Compositions[compIdx].Layout.Count;
@@ -568,7 +568,7 @@ namespace DiscordBot.Core
                 //Write the id into the array
                 Marshal.WriteInt64(offset, (long)r.ID);
                 var next = offset + userSize;
-                offset  += sizeof(ulong);
+                offset   = next - (userSize - sizeof(ulong));
 
                 //Iterate through the roles
                 roles.ForEach((role) =>
