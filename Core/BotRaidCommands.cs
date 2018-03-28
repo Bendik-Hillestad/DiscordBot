@@ -577,7 +577,8 @@ namespace DiscordBot.Core
                     float weight = r.GetRoleWeight(role);
 
                     //Write the weight into the array
-                    Marshal.WriteInt32(offset, BitConverter.SingleToInt32Bits(weight));
+                    unsafe { float* ptr = (float*)offset.ToPointer(); *ptr = weight; }
+                    //Marshal.WriteInt32(offset, BitConverter.SingleToInt32Bits(weight));
                     offset += sizeof(float);
                 });
 
