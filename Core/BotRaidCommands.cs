@@ -183,7 +183,7 @@ namespace DiscordBot.Core
                         "create", this, "CmdRaidCreateComp", "CmdRaidCreateCompHelp",
                         "comp",  @"comp(?:$|\s)",
                         "name",  @"(\w+)(?:$|\s)",
-                        "roles", @"(\D.+?)$"
+                        "roles", @"(.+?)$"
                     )
                 )
                 .RegisterCommand
@@ -1197,7 +1197,7 @@ namespace DiscordBot.Core
 
         private List<string> GetRoles(string roleList)
         {
-            return Regex.Matches (roleList, @"\D\w+")
+            return Regex.Matches (roleList, @"\w+")
                         .Select  ((r) => r.Value.ToUpper())
                         .Distinct()
                         .Where   ((r) => this.raidConfig.GetRoles().Contains(r))
@@ -1487,7 +1487,7 @@ namespace DiscordBot.Core
         private string CmdRaidCreateComp(SocketUserMessage msg, string name, string comp)
         {
             //Get all the roles (including duplicates)
-            var roles = Regex.Matches(comp, @"\D\w+")
+            var roles = Regex.Matches(comp, @"\w+")
                              .Select ((r) => r.Value.ToUpper())
                              .ToList ();
 
