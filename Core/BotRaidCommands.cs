@@ -183,7 +183,7 @@ namespace DiscordBot.Core
                         "create", this, "CmdRaidCreateComp", "CmdRaidCreateCompHelp",
                         "comp",  @"comp(?:$|\s)",
                         "name",  @"(\w+)(?:$|\s)",
-                        "roles", @"(.+?)$"
+                        "roles", @"(.+?)"
                     )
                 )
                 .RegisterCommand
