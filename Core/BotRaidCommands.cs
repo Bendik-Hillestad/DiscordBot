@@ -231,26 +231,6 @@ namespace DiscordBot.Core
 
         /* Spooky unsafe C stuff */
 
-        [StructLayout(LayoutKind.Explicit, Pack = 8, Size = 32)]
-        unsafe struct CPP_User
-        {
-            [FieldOffset(0)]
-            public ulong userID;
-
-            [FieldOffset(8)]
-            public fixed float weights[5];
-        };
-
-        [StructLayout(LayoutKind.Explicit, Pack = 8, Size = 16)]
-        unsafe struct CPP_Idk
-        {
-            [FieldOffset(0)]
-            public ulong userID;
-
-            [FieldOffset(8)]
-            public float weight;
-        }
-
         [DllImport("libherrington")]
         private static extern void solve(uint idx, IntPtr users, int length, IntPtr output);
 
@@ -617,107 +597,6 @@ namespace DiscordBot.Core
             //Return the result
             return result;
         }
-
-        /*private static Raider[] MakeRaidComp(Raider[] roster)
-        {
-            //Prepare our pointer to the unmanaged array of C_Raiders
-            IntPtr ptr = IntPtr.Zero;
-
-            //Catch any errors
-            try
-            {
-                //Allocate our unmanaged array
-                ptr = Marshal.AllocHGlobal(Marshal.SizeOf<C_Raider>() * roster.Length);
-
-                //Allocate managed array for our C# roster
-                Raider[] comp = new Raider[10];
-
-                //Begin our unsafe section
-                unsafe
-                {
-                    //Cast to C_Raider pointer
-                    C_Raider* cRoster = (C_Raider*) ptr;
-
-                    //Iterate over our roster
-                    for (int i = 0; i < roster.Length; i++)
-                    {
-                        //Copy userID
-                        cRoster[i].userID = roster[i].ID;
-
-                        //Copy roles
-                        cRoster[i].role = (roster[i].HasRole("MES")   ? (int)C_Roles.MES   : 0) |
-                                          (roster[i].HasRole("HEAL")  ? (int)C_Roles.HEAL  : 0) |
-                                          (roster[i].HasRole("DPS")   ? (int)C_Roles.DPS   : 0) |
-                                          (roster[i].HasRole("SLAVE") ? (int)C_Roles.SLAVE : 0);
-
-                        //Calculate bias based on order of joining
-                        float bias = (float)Math.Pow((roster.Length - i) / (float)roster.Length, 0.1);
-
-                        //Calculate preferences and put them into an array
-                        cRoster[i].weights[(int)C_RoleWeight.MES_WEIGHT]   = roster[i].GetPreference("MES")   * bias;
-                        cRoster[i].weights[(int)C_RoleWeight.HEAL_WEIGHT]  = roster[i].GetPreference("HEAL")  * bias;
-                        cRoster[i].weights[(int)C_RoleWeight.DPS_WEIGHT]   = roster[i].GetPreference("DPS")   * bias;
-                        cRoster[i].weights[(int)C_RoleWeight.SLAVE_WEIGHT] = roster[i].GetPreference("SLAVE") * bias;
-                    }
-
-                    //Call our C function
-                    C_Comp* cComp = make_raid_comp(cRoster, (uint)roster.Length);
-
-                    //Check that it's not null
-                    if (cComp != null)
-                    {
-                        //Iterate over the userIDs
-                        for (int i = 0; i < 10; i++)
-                        {
-                            //Check that it's not 0
-                            if (cComp->userID[i] != 0)
-                            {
-                                //Find the Raider that matches the id
-                                Raider r = null;
-                                for (int j = 0; j < roster.Length; j++)
-                                {
-                                    if (roster[j].ID == cComp->userID[i])
-                                    {
-                                        r = roster[j];
-                                        break;
-                                    }
-                                }
-
-                                //Insert raider
-                                comp[i] = r;
-                            }
-                            else
-                            {
-                                //Insert null
-                                comp[i] = null;
-                            }
-                        }
-
-                        //Free the C array
-                        free_comp(cComp);
-
-                        //Return composition
-                        return comp;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                //Log error
-                Logger.Log(LOG_LEVEL.ERROR, ex.Message);
-            }
-            finally
-            {
-                //Release the memory
-                if (ptr != IntPtr.Zero)
-                {
-                    Marshal.FreeHGlobal(ptr);
-                }
-            }
-
-            //Return null
-            return null;
-        }*/
 
         private void SendDM(ulong userID, string text)
         {
