@@ -1443,7 +1443,7 @@ namespace DiscordBot.Core
             return "No comp with that name exists. These are the recognised comps: \n" + this.raidConfig.GetCompNames();
         }
 
-        private string CmdRaidMakeCompSimplest(SocketUserMessage msg, string name)
+        private string CmdRaidMakeCompSimple(SocketUserMessage msg, string name)
         {
             //Check if there is at least one raid being organised right now
             if (this.raidCalendar.GetNumberOfRaidEvents() > 0)
@@ -1516,7 +1516,7 @@ namespace DiscordBot.Core
             return "You need to provide the roles in the composition!";
         }
 
-        private string CmdRaidCreateCompHelp()
+        private string CmdRaidCreateCompHelp(SocketUserMessage _)
         {
             return "You did something wrong. Uh ask Grim for help, atm I'm too lazy to have a good help message.";
         }
