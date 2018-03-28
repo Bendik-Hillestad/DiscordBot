@@ -1,0 +1,3 @@
+[submodule "libherrington"]
+	path = libherrington
+	url = https://github.com/Bendik-Hillestad/libherrington
