@@ -289,6 +289,11 @@ namespace DiscordBot.Core
                     return true;
                 });
             }
+            catch (TargetInvocationException tix)
+            {
+                //Log error
+                Logger.Log(LOG_LEVEL.ERROR, tix.InnerException.Message);
+            }
             catch (Exception ex)
             {
                 //Log error
