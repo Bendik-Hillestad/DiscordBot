@@ -1396,6 +1396,7 @@ namespace DiscordBot.Core
                     var offset = 0;
                     var text   = this.raidConfig
                                      .GetRoleCounts(name.ToUpper())
+                                     .Where ((val) => val.Value > 0)
                                      .Select((val) =>
                                      {
                                          //Prepare the string for this role
