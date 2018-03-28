@@ -8,6 +8,8 @@ using Discord.WebSocket;
 
 using DiscordBot.Utils;
 
+using Timer = System.Threading.Timer;
+
 namespace DiscordBot.Core
 {
     public sealed partial class Bot
@@ -57,12 +59,40 @@ namespace DiscordBot.Core
                 init.Invoke(this, null);
             }
 
+            //Create our reconnect timer
+            this.reconnectTimer = new Timer(async (o) =>
+            {
+                //Check that we're not connected
+                if (this.client.ConnectionState == Discord.ConnectionState.Connected) return;
+
+                //Log it
+                Logger.Log(LOG_LEVEL.INFO, "Attempting to reconnect.");
+
+                //Attempt to reconnect
+                await this.client.StopAsync ();
+                await this.client.LoginAsync(Discord.TokenType.Bot, this.config["BotToken"]);
+                await this.client.StartAsync();
+            }, null, Timeout.Infinite, 60 * 1000);
+
             //Add logger for Discord API messages
             this.client.Log += Logger.Log;
+
+            //Add disconnect handler
+            this.client.Disconnected += (e) =>
+            {
+                //Start timer
+                this.reconnectTimer.Change(60 * 1000, 60 * 1000);
+
+                //Return completed
+                return Task.CompletedTask;
+            };
 
             //Add ready handler
             this.client.Ready += () =>
             {
+                //Stop the timer
+                this.reconnectTimer.Change(Timeout.Infinite, 60 * 1000);
+
                 //Check that it's only run once
                 if (!this.hasInit)
                 {
@@ -412,6 +442,8 @@ namespace DiscordBot.Core
         private Queue<SocketUserMessage>   messageQueue;
         private ulong                      ownerID;
         private bool                       hasInit;
+
+        private Timer                      reconnectTimer;
 
         private readonly object            messageLock      = new object();
         private readonly Semaphore         messageSemaphore = new Semaphore(0, int.MaxValue);
