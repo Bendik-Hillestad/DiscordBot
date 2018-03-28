@@ -196,7 +196,7 @@ namespace DiscordBot.Raids
                                          "-march=native -fvisibility=hidden -fvisibility-inlines-hidden " +
                                          "-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic " +
                                          "-Wno-missing-prototypes ./libherrington/dllmain.cpp " +
-                                         "-o libherrington.dll",
+                                         "-o libherrington.so",
                 UseShellExecute        = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError  = true
