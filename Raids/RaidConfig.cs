@@ -175,7 +175,7 @@ namespace DiscordBot.Raids
             code += "#endif\n";
 
             //Create the source file
-            File.WriteAllText("dllmain.cpp", code);
+            File.WriteAllText("./libherrington/dllmain.cpp", code);
 
             //For easier debugging, format the text
 #           if DEBUG
@@ -184,7 +184,7 @@ namespace DiscordBot.Raids
                 FileName               = "clang-format",
                 Arguments              = "-style=file " +
                                          "-i " +
-                                         "dllmain.cpp",
+                                         "./libherrington/dllmain.cpp",
                 UseShellExecute        = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError  = true
@@ -198,8 +198,8 @@ namespace DiscordBot.Raids
                 Arguments              = "-std=c++17 -fPIC -shared -fno-exceptions -O3 " +
                                          "-march=native -fvisibility=hidden -fvisibility-inlines-hidden " +
                                          "-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic " +
-                                         "-Wno-missing-prototypes dllmain.cpp " +
-                                         "-o libherrington.so",
+                                         "-Wno-missing-prototypes ./libherrington/dllmain.cpp " +
+                                         "-o libherrington.dll",
                 UseShellExecute        = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError  = true
