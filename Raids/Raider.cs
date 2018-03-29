@@ -46,25 +46,6 @@ namespace DiscordBot.Raids
             return this.backup;
         }
 
-        /*public float GetPreference(string role)
-        {
-            //Check if we don't have the role
-            if (!this.HasRole(role)) return 0.0f;
-
-            //Set starting preference
-            float pref = 1.4f;
-
-            //Iterate through the roles
-            for (int i = 0; i < this.roles.Length; i++, pref -= (0.9f) / (roles.Length - 1))
-            {
-                //Check for match
-                if (this.roles[i].ToLower() == role.ToLower()) break;
-            }
-
-            //Return the score
-            return pref;
-        }*/
-
         [DataMember(Name = "ID")]
         public ulong ID;
         [DataMember(Name = "nick")]
