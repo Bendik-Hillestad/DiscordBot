@@ -37,8 +37,11 @@ namespace DiscordBot.Raids
             //Check if we don't have the role
             if (!this.HasRole(role)) return 0.0f;
 
+            //If backup just divide the final score by this value
+            float d = (this.IsBackup() ? 3.0f : 1.0f);
+
             //Return a simple weighting
-            return 1.0f + (string.Equals(role, this.roles[0]) ? 0.5f : 0.0f);
+            return (1.0f + (string.Equals(role, this.roles[0]) ? 0.5f : 0.0f)) / d;
         }
 
         public bool IsBackup()
