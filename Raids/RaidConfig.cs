@@ -197,9 +197,9 @@ namespace DiscordBot.Raids
                                          "-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic " +
                                          "-Wno-missing-prototypes ./libherrington/dllmain.cpp " +
                                          "-o libherrington.so",
-                UseShellExecute        = false,
+                UseShellExecute        = true/*,
                 RedirectStandardOutput = true,
-                RedirectStandardError  = true
+                RedirectStandardError  = true*/
             });
         }
 
