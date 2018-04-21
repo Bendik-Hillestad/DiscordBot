@@ -189,18 +189,37 @@ namespace DiscordBot.Raids
 #           endif
 
             //Compile the code
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            var clang = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName               = "clang",
-                Arguments              = "-std=c++17 -fPIC -shared -fno-exceptions -O3 " +
+                Arguments              = "-std=c++17 -fPIC -shared -fno-exceptions -fno-rtti -O3 " +
                                          "-march=native -fvisibility=hidden -fvisibility-inlines-hidden " +
                                          "-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic " +
-                                         "-Wno-missing-prototypes ./libherrington/dllmain.cpp " +
+                                         "-Wno-padded -Wno-missing-prototypes ./libherrington/dllmain.cpp " +
                                          "-o libherrington.so",
-                UseShellExecute        = true/*,
+                UseShellExecute        = false,
                 RedirectStandardOutput = true,
-                RedirectStandardError  = true*/
+                RedirectStandardError  = true
             });
+
+            //Dump outputs
+            System.Threading.Tasks.Task.WaitAll
+            (
+                System.Threading.Tasks.Task.Run(async () =>
+                {
+                    using (FileStream fs = new FileStream("clang_output.txt", FileMode.Create))
+                    {
+                        await clang.StandardOutput.BaseStream.CopyToAsync(fs);
+                    }
+                }),
+                System.Threading.Tasks.Task.Run(async () =>
+                {
+                    using (FileStream fs = new FileStream("clang_error.txt", FileMode.Create))
+                    {
+                        await clang.StandardError.BaseStream.CopyToAsync(fs);
+                    }
+                })
+            );
         }
 
         public List<KeyValuePair<string, int>> GetRoleCounts(string compName)
