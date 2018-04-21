@@ -198,28 +198,18 @@ namespace DiscordBot.Raids
                                          "-Wno-padded -Wno-missing-prototypes ./libherrington/dllmain.cpp " +
                                          "-o libherrington.so",
                 UseShellExecute        = false,
-                RedirectStandardOutput = true,
+                RedirectStandardOutput = false,
                 RedirectStandardError  = true
             });
 
-            //Dump outputs
-            System.Threading.Tasks.Task.WaitAll
-            (
-                System.Threading.Tasks.Task.Run(async () =>
+            //Dump output (Not reading the error stream causes trouble with outputting the shared object)
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                using (FileStream fs = new FileStream("clang_error.txt", FileMode.Create))
                 {
-                    using (FileStream fs = new FileStream("clang_output.txt", FileMode.Create))
-                    {
-                        await clang.StandardOutput.BaseStream.CopyToAsync(fs);
-                    }
-                }),
-                System.Threading.Tasks.Task.Run(async () =>
-                {
-                    using (FileStream fs = new FileStream("clang_error.txt", FileMode.Create))
-                    {
-                        await clang.StandardError.BaseStream.CopyToAsync(fs);
-                    }
-                })
-            );
+                    await clang.StandardError.BaseStream.CopyToAsync(fs);
+                }
+            }).GetAwaiter().GetResult();
         }
 
         public List<KeyValuePair<string, int>> GetRoleCounts(string compName)
