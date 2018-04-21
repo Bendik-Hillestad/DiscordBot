@@ -16,6 +16,22 @@ namespace DiscordBot.Raids
             this.backup = backup;
         }
 
+        public string PreferredRole
+        {
+            get
+            {
+                //Check that we even have a role
+                if (this.roles != null && this.roles.Length > 0)
+                {
+                    //Get the first role
+                    return this.roles[0];
+                }
+
+                //Nothing to return
+                return null;
+            }
+        }
+
         public bool HasRole(string role)
         {
             //Check if our roles is null
@@ -41,7 +57,7 @@ namespace DiscordBot.Raids
             float d = (this.IsBackup() ? 3.0f : 1.0f);
 
             //Return a simple weighting
-            return (1.0f + (string.Equals(role, this.roles[0]) ? 0.5f : 0.0f)) / d;
+            return (1.0f + (string.Equals(role, this.PreferredRole) ? 0.5f : 0.0f)) / d;
         }
 
         public bool IsBackup()

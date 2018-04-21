@@ -545,7 +545,7 @@ namespace DiscordBot.Core
             var output    = Marshal.AllocHGlobal(blockSize * compSize);
 
             //Iterate through the raiders
-            var offset = input;
+            var offset = input; var idx = 0;
             raiders.ForEach((r) =>
             {
                 //Write the id into the array
@@ -553,19 +553,25 @@ namespace DiscordBot.Core
                 var next = offset + userSize;
                 offset  += sizeof(ulong);
 
+                //Calculate a bias by squashing the join index into the [0, 1] range
+                float bias = 1.0f - (idx / (idx + 2.0f * compSize));
+
                 //Iterate through the roles
                 roles.ForEach((role) =>
                 {
-                    //Get the weight
+                    //Get the weight for this role
                     float weight = r.GetRoleWeight(role);
+
+                    //Adjust the weight
+                    weight = weight * bias;
 
                     //Write the weight into the array
                     Marshal.WriteInt32(offset, BitConverter.SingleToInt32Bits(weight));
                     offset += sizeof(float);
                 });
 
-                //Update offset
-                offset = next;
+                //Update offset and index
+                offset = next; idx++;
             });
 
             //Feed values to the solver
