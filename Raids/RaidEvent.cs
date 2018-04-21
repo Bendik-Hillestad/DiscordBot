@@ -107,8 +107,9 @@ namespace DiscordBot.Raids
                 if (this.roster[i].ID == raider.ID)
                 {
                     //Update values
-                    this.roster[i].nick  = raider.nick;
-                    this.roster[i].roles = raider.roles;
+                    this.roster[i].nick   = raider.nick;
+                    this.roster[i].roles  = raider.roles;
+                    this.roster[i].backup = raider.backup;
                 }
             }
         }
