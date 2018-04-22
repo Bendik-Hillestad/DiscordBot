@@ -188,6 +188,9 @@ namespace DiscordBot.Raids
             });
 #           endif
 
+            //Delete the previous library just in case
+            if (File.Exists("libherrington.so")) File.Delete("libherrington.so");
+
             //Compile the code
             var clang = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
