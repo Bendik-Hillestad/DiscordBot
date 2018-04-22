@@ -1,13 +1,8 @@
 ﻿using System;
-using System.Linq;
-using System.Threading.Tasks;
-using System.IO;
-using System.Text;
-using System.Net;
-
-using Discord.WebSocket;
 
 using DiscordBot.Utils;
+
+using Discord.WebSocket;
 
 namespace DiscordBot.Core
 {
@@ -83,7 +78,5 @@ namespace DiscordBot.Core
                    "\n" +
                    "Pro-tip: You can also DM me (Left click me and type your command).";
         }
-
-
     }
 }
