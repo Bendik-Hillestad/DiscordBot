@@ -152,6 +152,26 @@ namespace DiscordBot.Raids
             return false;
         }
 
+        public bool RemoveRaider(string name)
+        {
+            //Iterate over raiders
+            for (int i = 0; i < this.roster.Count; i++)
+            {
+                //Check if the names partially match
+                if (this.roster[i].nick.ToLower().StartsWith(name.ToLower()))
+                {
+                    //Remove from roster
+                    this.roster.RemoveAt(i);
+
+                    //Return success
+                    return true;
+                }
+            }
+
+            //Return failure
+            return false;
+        }
+
         public string RenderRoster(out int rosterCount)
         {
             //Check if there are any raiders

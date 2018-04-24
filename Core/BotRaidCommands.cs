@@ -129,8 +129,36 @@ namespace DiscordBot.Core
                 (
                     new Command
                     (
+                        "add", this, "CmdRaidAdd", "CmdRaidAddHelp",
+                        "ID",    @"(\d+)(?:$|\s)",
+                        "name",  @"(.+?)\s*\|",
+                        "roles", @"(.+?)$"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "add", this, "CmdRaidAddSimple", "CmdRaidAddHelp",
+                        "name",  @"(\D.+?)\s*\|",
+                        "roles", @"(.+?)$"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
                         "leave", this, "CmdRaidLeave", "CmdRaidLeaveHelp",
                         "ID", @"(\d+)(?:$|\s)"
+                    )
+                )
+                .RegisterCommand
+                (
+                    new Command
+                    (
+                        "kick", this, "CmdRaidKick", "CmdRaidKickHelp",
+                        "ID",   @"(\d+)(?:$|\s)",
+                        "name", @"(.+?)$"
                     )
                 )
                 .RegisterCommand
@@ -831,13 +859,79 @@ namespace DiscordBot.Core
 
         private string CmdRaidJoinHelp(SocketUserMessage _)
         {
-            return "To join a raid you must provide the ID for the raid and your available roles.\n" +
-                   "The roles are DPS, SLAVE, HEAL, MES and KITER. You can provide them in any order (for example " +
-                   "in order of preference) separated by spaces, commas or any other symbol.\n" +
-                   "For example: \"$raid join 123 HEAL DPS MES\". It is not case-sensitive.\n" +
-                   "If you wish to add or remove a role, simply type the command again with a new list.\n" +
-                   "If you do not know the ID for the raid, type \"$raid list\" to find it.\n" +
-                   "**You can omit the id to simply join the first raid.**";
+            return $"To join a raid you must provide the ID for the raid and your available roles.\n" +
+                   $"The roles are {string.Join(", ", this.raidConfig.GetRoles())}. " +
+                   $"You can provide them in any order (for example in order of preference) " +
+                   $"separated by spaces, commas or any other symbol.\n" +
+                   $"For example: \"$raid join 123 DPS\". It is not case-sensitive.\n" +
+                   $"If you wish to add or remove a role, simply type the command again with a new list.\n" +
+                   $"If you do not know the ID for the raid, type \"$raid list\" to find it.\n" +
+                   $"**You can omit the id to simply join the first raid.**";
+        }
+
+        private string CmdRaidAdd(SocketUserMessage msg, int raidID, string name, string roleList)
+        {
+            //Get the roles
+            var roles = this.GetRoles(roleList);
+            bool bu = false;
+
+            //Check if one of the roles is BACKUP
+            if (roleList.ToUpper().Contains("BACKUP"))
+            {
+                //Set flag
+                bu = true;
+            }
+
+            //Check that we got at least one
+            if ((roles?.Count ?? 0) > 0)
+            {
+                //Try to add to the raid
+                if (this.raidCalendar.AddRaider(raidID, Utility.RandomUInt64(), name, roles, bu))
+                {
+                    //Save raid calendar
+                    RaidCalendar.SaveToFile(this.raidCalendar, RAID_CALENDAR_FILE);
+
+                    //Return success
+                    return $"They were added to the raid{(bu ? " as backup" : "")} with these roles: \"{string.Join(", ", roles)}\".";
+                }
+                else
+                {
+                    //Return error
+                    return "No raid with ID \"" + raidID + "\" found. Type \"$raid list\" if you need to find the ID.";
+                }
+            }
+            else
+            {
+                //Return error
+                return "No roles provided. Type \"$raid add\" if you need help with this command.";
+            }
+        }
+
+        private string CmdRaidAddSimple(SocketUserMessage msg, string name, string roleList)
+        {
+            //Check if there is at least one raid being organised right now
+            if (this.raidCalendar.GetNumberOfRaidEvents() > 0)
+            {
+                //Get the ID for the first event
+                int raidID = this.raidCalendar.GetFirstEvent().ID;
+
+                //Pass on to the full implementation
+                return this.CmdRaidAdd(msg, raidID, name, roleList);
+            }
+
+            //Return error
+            return "There are no raids being organised right now.";
+        }
+
+        private string CmdRaidAddHelp(SocketUserMessage _)
+        {
+            return $"To add someone to a raid you must provide the ID for the raid and their role(s).\n" +
+                   $"The roles are {string.Join(", ", this.raidConfig.GetRoles())}. " +
+                   $"You can provide them in any order (for example in order of preference) " +
+                   $"separated by spaces, commas or any other symbol.\n" +
+                   $"For example: \"$raid add 123 SomeGuy.1234 | DPS\". It is not case-sensitive.\n" +
+                   $"If you do not know the ID for the raid, type \"$raid list\" to find it.\n" +
+                   $"**You can omit the id to simply join the first raid.**";
         }
 
         private string CmdRaidLeave(SocketUserMessage msg, int raidID)
@@ -862,6 +956,49 @@ namespace DiscordBot.Core
                    "If you do not remember the ID, type \"$raid list\" to find it.\n" +
                    "You can then type \"$raid leave [ID]\"\n" + 
                    "For example: \"$raid leave 123\"";
+        }
+
+        private string CmdRaidKick(SocketUserMessage msg, int raidID, string name)
+        {
+            //Get the event
+            var e = this.raidCalendar.FindEvent(raidID);
+
+            //Check if it's null
+            if (e == null)
+            {
+                //Return failure
+                return $"Couldn't find a raid with that ID ({raidID}).";
+            }
+
+            //Check if the user is the owner
+            if (e.Owner == msg.Author.Id)
+            {
+                //Try to remove from the raid
+                if (this.raidCalendar.RemoveRaider(raidID, name))
+                {
+                    //Save raid calendar
+                    RaidCalendar.SaveToFile(this.raidCalendar, RAID_CALENDAR_FILE);
+
+                    //Return success
+                    return "You were removed from the roster.\n";
+                }
+
+                //Return failure
+                return "Couldn't find that player in the raid.";
+            }
+            else
+            {
+                //Return failure
+                return "Only the owner of the raid can kick people.";
+            }
+        }
+
+        private string CmdRaidKickHelp(SocketUserMessage _)
+        {
+            return "To kick someone from the raid you must provide the ID for the raid and their name.\n" +
+                   "If you do not remember the ID, type \"$raid list\" to find it.\n" +
+                   "You can then type \"$raid kick [ID] [name]\"\n" +
+                   "For example: \"$raid kick 123 SomeGuy\"";
         }
 
         private string CmdRaidNotify(SocketUserMessage msg, string notification)

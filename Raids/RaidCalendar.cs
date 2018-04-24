@@ -169,6 +169,27 @@ namespace DiscordBot.Raids
             return false;
         }
 
+        public bool RemoveRaider(int raidID, string name)
+        {
+            //Iterate over raid events
+            foreach (RaidEvent e in this.raidEvents)
+            {
+                //Check if id matches
+                if (e.ID == raidID)
+                {
+                    //Try to remove raider
+                    if (e.RemoveRaider(name))
+                    {
+                        //Return success
+                        return true;
+                    }
+                }
+            }
+
+            //Return failure
+            return false;
+        }
+
         public List<Raider> GetRaiders(int raidID)
         {
             //Iterate over raid events
@@ -237,6 +258,16 @@ namespace DiscordBot.Raids
                     i--;
                 }
             }
+        }
+
+        public RaidEvent FindEvent(int raidID)
+        {
+            foreach (RaidEvent e in this.raidEvents)
+            {
+                if (e.ID == raidID) return e;
+            }
+
+            return null;
         }
 
         public List<Notification> CheckReminders(DateTime now, DateTime next)
