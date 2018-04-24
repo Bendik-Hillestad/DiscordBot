@@ -1,19 +1,21 @@
 ﻿using System;
 using System.IO;
-using System.Collections.Generic;
 using System.Text;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Linq;
 
 using DiscordBot.Utils;
 
+using Newtonsoft.Json;
+
 namespace DiscordBot.Raids
 {
     public struct RaidHandle
     {
-        public string fullName;
+        public string full_name;
         public long   timestamp;
-        public int    raidID;
+        public int    raid_id;
     }
 
     public struct Raid
@@ -28,11 +30,31 @@ namespace DiscordBot.Raids
     public struct Entry
     {
         public ulong        user_id { get; set; }
+        public bool         backup  { get; set; }
         public List<string> roles   { get; set; }
     }
 
     public static class RaidManager
     {
+        private static T MaxOrDefault<T>(this IEnumerable<T> enumeration) where T : struct
+        {
+            return (enumeration.Max(value => (T?)value) ?? default(T));
+        }
+
+        /// <summary>
+        /// Performs some simple initialisation to ensure
+        /// that all necessary files and folders exist.
+        /// </summary>
+        public static void Initialise()
+        {
+            //Check if the raids folder doesn't exist
+            if (!Directory.Exists("./raids/"))
+            {
+                //Create the directory
+                Directory.CreateDirectory("./raids/");
+            }
+        }
+
         /// <summary>
         /// Enumerates all the raids.
         /// </summary>
@@ -43,7 +65,7 @@ namespace DiscordBot.Raids
         public static IEnumerable<RaidHandle> EnumerateRaids()
         {
             //Create a regex to match a raid folder
-            Regex regex = new Regex(@"^raid_(\d+)_(\d+)$");
+            var regex = new Regex(@"raid_(\d+)_(\d+)$");
 
             //Return a collection of raid file handles
             return Directory.EnumerateDirectories("./raids/") //Enumerate folders under raid directory
@@ -51,9 +73,9 @@ namespace DiscordBot.Raids
                             .Select(f => regex.Match(f))      //Extract timestamp and ID
                             .Select(r => new RaidHandle       //Wrap in a simple aggregate object  
                             {
-                                fullName  = r.Name,
+                                full_name = r.Value,
                                 timestamp = long.Parse(r.Groups[1].Value),
-                                raidID    = int .Parse(r.Groups[2].Value)
+                                raid_id   = int .Parse(r.Groups[2].Value)
                             });
         }
 
@@ -64,18 +86,16 @@ namespace DiscordBot.Raids
         /// A number between 1 and <see cref="Int32.MaxValue"/> if successful,
         /// returns -1 if the operation failed.
         /// </returns>
-        private static int GetNextAvailableRaidID()
+        public static int GetNextAvailableRaidID()
         {
             //Catch any errors
-            return Debug.Try<int>(() =>
+            return Debug.Try(() =>
             {
                 //Find used raid IDs
-                var ids = RaidManager.EnumerateRaids()
-                                     .Select  (r => r.raidID)
-                                     .Distinct();
+                var ids = EnumerateRaids().Select(r => r.raid_id);
 
                 //Create the range we will search through
-                var searchSpace = Enumerable.Range(1, ids.Max());
+                var searchSpace = Enumerable.Range(1, ids.MaxOrDefault() + 1);
 
                 //Find the next available ID
                 return searchSpace.Except(ids).Min();
@@ -85,102 +105,138 @@ namespace DiscordBot.Raids
         /// <summary>
         /// Initialises a new raid.
         /// </summary>
+        /// <param name="owner_id">The raid owner's unique ID on Discord.</param>
         /// <param name="offset">The time offset for when the raid starts.</param>
         /// <param name="description">The description of the raid.</param>
         /// <returns>
         /// Returns the assigned ID for the raid which will be in the range 1 to
         /// <see cref="Int32.MaxValue"/> if successful, otherwise it will return -1.
         /// </returns>
-        private static int CreateRaid(DateTimeOffset offset, string description)
-        {
-            //Find an available ID
-            int raidID = RaidManager.GetNextAvailableRaidID();
-
-            //Catch any errors
-            return Debug.Try<int>(() =>
-            {
-                //Check that the ID is valid
-                Debug.Assert(raidID > 0, "Couldn't get a valid raid ID");
-
-                //Determine the folder name
-                var name = $"raid_{offset.ToUnixTimeSeconds()}_{raidID}";
-
-                //Create directory for the raid
-                var dir = Directory.CreateDirectory($"./raids/{name}/");
-
-                //Check that it was created
-                Debug.Assert(dir.Exists, "Couldn't create raid directory");
-
-                //Create the initial roster file
-                using (FileStream fs = File.Open($@"./raids/{name}/roster.txt", FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                {
-                    /*//Get a UTF8 encoded text stream
-                    using (StreamWriter sw = new StreamWriter(fs, Encoding.UTF8))
-                    {
-                        //Write description
-                        sw.WriteLine(description);
-                    }*/
-                }
-
-                //Return success
-                return raidID;
-            }, -1);
-        }
-
-        /// <summary>
-        /// Appends a raider to the raid roster.
-        /// Note: Changes to role will simply be documented with a later entry to the file.
-        /// Shouldn't be an issue.
-        /// </summary>
-        /// <param name="raidID">The ID of the raid.</param>
-        /// <param name="userID">The user's unique ID on Discord.</param>
-        /// <param name="roles">A space-separated list of roles in upper-case.</param>
-        /// <returns>Returns whether the operation was successful or not.</returns>
-        /*private static bool AppendRaider(int raidID, UInt64 userID, string roles)
+        public static int CreateRaid(ulong owner_id, DateTimeOffset offset, string description)
         {
             //Catch any errors
             return Debug.Try(() =>
             {
-                //Find the correct raid folder
-                var raid = EnumerateRaids().Where(r => r.raidID == raidID).First();
-
-                //Keep trying until we succeed
-                Utility.WithRetry((retryNum) =>
+                //Construct a Raid object
+                var raid = new Raid
                 {
-                    //Sleep between retries
-                    if (retryNum > 0) Thread.Sleep(100);
+                    owner_id    = owner_id,
+                    raid_id     = GetNextAvailableRaidID(),
+                    timestamp   = offset.ToUnixTimeSeconds(),
+                    description = description,
+                    roster      = new List<Entry>()
+                };
 
-                    //Catch IO errors thrown when we can't get exclusive access
-                    try
-                    {
-                        //Get an exclusive handle to the file
-                        using (FileStream fs = File.Open($@"./raids/{raid.fullName}/roster.txt", FileMode.Append, FileAccess.Write, FileShare.None))
-                        {
-                            //Get a UTF8 encoded text stream
-                            using (StreamWriter sw = new StreamWriter(fs, Encoding.UTF8))
-                            {
-                                //Append raider
-                                sw.WriteLine($"{userID} - {roles}");
-                            }
-                        }
+                //Check that the ID is valid
+                Debug.Assert(raid.raid_id > 0, "Couldn't get a valid raid ID");
 
-                        //Return success
-                        return true;
-                    }
-                    catch (IOException ex)
-                    {
-                        //Check that it's not some other error
-                        Debug.Assert(ex.HResult == -2147024864, "Unexpected IO exception.");
+                //Determine the folder name
+                var name = $"raid_{raid.timestamp}_{raid.raid_id}";
 
-                        //Return failure
-                        return false;
-                    }
-                }, 10);
+                //Create directory for the raid
+                Directory.CreateDirectory($"./raids/{name}/");
 
-                //Return success
-                return true;
+                //Create the initial raid file
+                using (var sw = File.CreateText($"./raids/{name}/raid.json"))
+                {
+                    //Serialise the Raid object
+                    sw.Write(JsonConvert.SerializeObject(raid, Formatting.Indented));
+                }
+
+                //Return the assigned id
+                return raid.raid_id;
+            }, -1);
+        }
+
+        public static bool DeleteRaid(int raid_id)
+        {
+            //Catch any errors
+            return Debug.Try(() =>
+            {
+                //Get a handle to the raid
+                var handle = EnumerateRaids().First(r => r.raid_id == raid_id);
+
+                //Delete the raid folder and all content in it
+                Directory.Delete($"./raids/{handle.full_name}/", true);
             });
-        }*/
+        }
+
+        /// <summary>
+        /// Appends a raider to the raid roster.
+        /// </summary>
+        /// <param name="raid_id">The ID of the raid.</param>
+        /// <param name="user_id">The user's unique ID on Discord.</param>
+        /// <param name="roles">A collection of roles the user can take.</param>
+        /// <returns>Returns whether the operation was successful or not.</returns>
+        public static bool AppendRaider(int raid_id, ulong user_id, bool backup, IEnumerable<string> roles)
+        {
+            //Catch any errors
+            return Debug.Try(() =>
+            {
+                //Get a handle to the raid
+                var handle = EnumerateRaids().First(r => r.raid_id == raid_id);
+
+                //Open the raid file
+                using (FileStream fs = File.Open($"./raids/{handle.full_name}/raid.json", FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                {
+                    //Prepare the structure holding the data
+                    Raid raid;
+
+                    //Get UTF-8 encoded text streams
+                    StreamReader sr = new StreamReader(fs, Encoding.UTF8);
+                    StreamWriter sw = new StreamWriter(fs, Encoding.UTF8);
+
+                    //Deserialise the JSON
+                    raid = JsonConvert.DeserializeObject<Raid>(sr.ReadToEnd());
+
+                    //Reset the stream
+                    fs.Seek     (0, SeekOrigin.Begin);
+                    fs.SetLength(0);
+
+                    //Append the raider
+                    raid.roster.Add(new Entry { user_id = user_id, backup = backup, roles = roles.ToList() });
+
+                    //Serialise the Raid object
+                    sw.Write(JsonConvert.SerializeObject(raid, Formatting.Indented));
+                    sw.Flush();
+                }
+            });
+        }
+
+        public static bool RemoveRaider(int raid_id, ulong user_id)
+        {
+            //Catch any errors
+            return Debug.Try(() =>
+            {
+                //Get a handle to the raid
+                var handle = EnumerateRaids().First(r => r.raid_id == raid_id);
+
+                //Open the raid file
+                using (FileStream fs = File.Open($"./raids/{handle.full_name}/raid.json", FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                {
+                    //Prepare the structure holding the data
+                    Raid raid;
+
+                    //Get UTF-8 encoded text streams
+                    StreamReader sr = new StreamReader(fs, Encoding.UTF8);
+                    StreamWriter sw = new StreamWriter(fs, Encoding.UTF8);
+
+                    //Deserialise the JSON
+                    raid = JsonConvert.DeserializeObject<Raid>(sr.ReadToEnd());
+
+                    //Reset the stream
+                    fs.Seek     (0, SeekOrigin.Begin);
+                    fs.SetLength(0);
+
+                    //Remove the raider
+                    raid.roster.RemoveAll((e) => e.user_id == user_id);
+
+                    //Serialise the Raid object
+                    sw.Write(JsonConvert.SerializeObject(raid, Formatting.Indented));
+                    sw.Flush();
+                }
+            });
+        }
 
         /// <summary>
         /// Removes old raid files.
@@ -189,13 +245,13 @@ namespace DiscordBot.Raids
         /// The allowed age before the file is removed.
         /// Starts counting after start of raid.
         /// </param>
-        private static void CleanRaidFiles(TimeSpan maxAge)
+        public static void CleanRaidFiles(TimeSpan maxAge)
         {
             //Get current time in UTC+0
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
             //Find the raids we want to delete
-            RaidManager.EnumerateRaids().Where(r =>
+            EnumerateRaids().Where(r =>
             {
                 //Calculate age in seconds
                 var age = (now - r.timestamp);
@@ -208,7 +264,7 @@ namespace DiscordBot.Raids
             }).ToList().ForEach(r =>
             {
                 //Try deleting directory (with contents)
-                Debug.Try(() => Directory.Delete($"./raids/{r.fullName}", true));
+                Debug.Try(() => Directory.Delete($"./raids/{r.full_name}/", true));
             });
         }
     }
