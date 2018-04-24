@@ -48,6 +48,13 @@ namespace DiscordBot.Utils
             {
                 //Log error
                 Logger.Log(LOG_LEVEL.ERROR, ex.Message, method, lineNumber);
+
+                //Check for inner exception
+                if (ex.InnerException != null)
+                {
+                    //Log inner exception
+                    Logger.Log(LOG_LEVEL.ERROR, ex.InnerException.Message, method, lineNumber);
+                }
             }
 
             //Return failure
@@ -85,6 +92,13 @@ namespace DiscordBot.Utils
             {
                 //Log error
                 Logger.Log(LOG_LEVEL.ERROR, ex.Message, method, lineNumber);
+
+                //Check for inner exception
+                if (ex.InnerException != null)
+                {
+                    //Log inner exception
+                    Logger.Log(LOG_LEVEL.ERROR, ex.InnerException.Message, method, lineNumber);
+                }
             }
 
             //Return the default value
