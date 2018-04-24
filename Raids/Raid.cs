@@ -45,14 +45,18 @@ namespace DiscordBot.Raids
         /// Performs some simple initialisation to ensure
         /// that all necessary files and folders exist.
         /// </summary>
-        public static void Initialise()
+        public static bool Initialise()
         {
-            //Check if the raids folder doesn't exist
-            if (!Directory.Exists("./raids/"))
+            //Catch any errors
+            return Debug.Try(() =>
             {
-                //Create the directory
-                Directory.CreateDirectory("./raids/");
-            }
+                //Check if the raids folder doesn't exist
+                if (!Directory.Exists("./raids/"))
+                {
+                    //Create the directory
+                    Directory.CreateDirectory("./raids/");
+                }
+            });
         }
 
         /// <summary>
@@ -64,19 +68,23 @@ namespace DiscordBot.Raids
         /// </returns>
         public static IEnumerable<RaidHandle> EnumerateRaids()
         {
-            //Create a regex to match a raid folder
-            var regex = new Regex(@"raid_(\d+)_(\d+)$");
+            //Catch any errors
+            return Debug.Try(() =>
+            {
+                //Create a regex to match a raid folder
+                var regex = new Regex(@"raid_(\d+)_(\d+)$");
 
-            //Return a collection of raid file handles
-            return Directory.EnumerateDirectories("./raids/") //Enumerate folders under raid directory
-                            .Where (f => regex.IsMatch(f))    //Filter out non-raids
-                            .Select(f => regex.Match(f))      //Extract timestamp and ID
-                            .Select(r => new RaidHandle       //Wrap in a simple aggregate object  
-                            {
-                                full_name = r.Value,
-                                timestamp = long.Parse(r.Groups[1].Value),
-                                raid_id   = int .Parse(r.Groups[2].Value)
-                            });
+                //Return a collection of raid file handles
+                return Directory.EnumerateDirectories("./raids/") //Enumerate folders under raid directory
+                                .Where (f => regex.IsMatch(f))    //Filter out non-raids
+                                .Select(f => regex.Match(f))      //Extract timestamp and ID
+                                .Select(r => new RaidHandle       //Wrap in a simple aggregate object  
+                                {
+                                    full_name = r.Value,
+                                    timestamp = long.Parse(r.Groups[1].Value),
+                                    raid_id   = int .Parse(r.Groups[2].Value)
+                                });
+            }, new RaidHandle[]{ });
         }
 
         /// <summary>
@@ -245,26 +253,30 @@ namespace DiscordBot.Raids
         /// The allowed age before the file is removed.
         /// Starts counting after start of raid.
         /// </param>
-        public static void CleanRaidFiles(TimeSpan maxAge)
+        public static bool CleanRaidFiles(TimeSpan maxAge)
         {
-            //Get current time in UTC+0
-            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
-            //Find the raids we want to delete
-            EnumerateRaids().Where(r =>
+            //Catch any errors
+            return Debug.Try(() =>
             {
-                //Calculate age in seconds
-                var age = (now - r.timestamp);
+                //Get current time in UTC+0
+                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-                //Wrap age in a TimeSpan object
-                var t = TimeSpan.FromTicks(TimeSpan.TicksPerSecond * age);
+                //Find the raids we want to delete
+                EnumerateRaids().Where(r =>
+                {
+                    //Calculate age in seconds
+                    var age = (now - r.timestamp);
 
-                //Keep only old raids
-                return t > maxAge;
-            }).ToList().ForEach(r =>
-            {
-                //Try deleting directory (with contents)
-                Debug.Try(() => Directory.Delete($"./raids/{r.full_name}/", true));
+                    //Wrap age in a TimeSpan object
+                    var t = TimeSpan.FromTicks(TimeSpan.TicksPerSecond * age);
+
+                    //Keep only old raids
+                    return t > maxAge;
+                }).ToList().ForEach(r =>
+                {
+                    //Delete the raid folder and all content in it
+                    Directory.Delete($"./raids/{r.full_name}/", true);
+                });
             });
         }
     }
