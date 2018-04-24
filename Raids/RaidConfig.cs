@@ -190,7 +190,7 @@ namespace DiscordBot.Raids
             });
 #           endif
 
-            Utility.WithRetry((i) => Debug.Try(() =>
+            Utility.WithRetry((i) => Utils.Debug.Try(() =>
             {
                 //Sleep between retries
                 if (i > 0) Thread.Sleep(100);
@@ -225,7 +225,7 @@ namespace DiscordBot.Raids
                 if (!clang.HasExited) clang.WaitForExit();
 
                 //Check that the file was generated
-                Debug.Assert(File.Exists("libherrington.so"), "Failed to create shared object.");
+                Utils.Debug.Assert(File.Exists("libherrington.so"), "Failed to create shared object.");
             }), 10);
         }
 
