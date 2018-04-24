@@ -1,8 +1,11 @@
 ﻿using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 using Newtonsoft.Json;
+
+using DiscordBot.Utils;
 
 namespace DiscordBot.Raids
 {
@@ -187,31 +190,43 @@ namespace DiscordBot.Raids
             });
 #           endif
 
-            //Delete the previous library just in case
-            if (File.Exists("libherrington.so")) File.Delete("libherrington.so");
-
-            //Compile the code
-            var clang = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            Utility.WithRetry((i) => Debug.Try(() =>
             {
-                FileName               = "clang",
-                Arguments              = "-std=c++17 -fPIC -shared -fno-exceptions -fno-rtti -O3 " +
-                                         "-march=native -fvisibility=hidden -fvisibility-inlines-hidden " +
-                                         "-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic " +
-                                         "-Wno-padded -Wno-missing-prototypes ./libherrington/dllmain.cpp " +
-                                         "-o libherrington.so",
-                UseShellExecute        = false,
-                RedirectStandardOutput = false,
-                RedirectStandardError  = true
-            });
+                //Sleep between retries
+                if (i > 0) Thread.Sleep(100);
 
-            //Dump output (Not reading the error stream causes trouble with outputting the shared object)
-            System.Threading.Tasks.Task.Run(async () =>
-            {
-                using (FileStream fs = new FileStream("clang_error.txt", FileMode.Create))
+                //Delete the previous library just in case
+                if (File.Exists("libherrington.so")) File.Delete("libherrington.so");
+
+                //Compile the code
+                var clang = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
-                    await clang.StandardError.BaseStream.CopyToAsync(fs);
-                }
-            }).GetAwaiter().GetResult();
+                    FileName               = "clang",
+                    Arguments              = "-std=c++17 -fPIC -shared -fno-exceptions -fno-rtti -O3 " +
+                                             "-march=native -fvisibility=hidden -fvisibility-inlines-hidden " +
+                                             "-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic " +
+                                             "-Wno-padded -Wno-missing-prototypes ./libherrington/dllmain.cpp " +
+                                             "-o libherrington.so",
+                    UseShellExecute        = false,
+                    RedirectStandardOutput = false,
+                    RedirectStandardError  = true
+                });
+
+                //Dump output (Not reading the error stream causes trouble with outputting the shared object)
+                System.Threading.Tasks.Task.Run(async () =>
+                {
+                    using (FileStream fs = new FileStream("clang_error.txt", FileMode.Create))
+                    {
+                        await clang.StandardError.BaseStream.CopyToAsync(fs);
+                    }
+                }).GetAwaiter().GetResult();
+
+                //Make sure that clang actually exited
+                if (!clang.HasExited) clang.WaitForExit();
+
+                //Check that the file was generated
+                Debug.Assert(File.Exists("libherrington.so"), "Failed to create shared object.");
+            }), 10);
         }
 
         public List<KeyValuePair<string, int>> GetRoleCounts(string compName)
