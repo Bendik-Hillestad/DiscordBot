@@ -62,7 +62,7 @@ namespace DiscordBot.Raids
         public void SaveConfig()
         {
             //Open/Create the file
-            using (FileStream fs = File.Open("raid_config.json", FileMode.OpenOrCreate, FileAccess.Write, FileShare.None))
+            using (FileStream fs = File.Open("raid_config.json", FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 using (StreamWriter sw = new StreamWriter(fs))
                 {
