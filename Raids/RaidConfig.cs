@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Diagnostics;
 
 using Newtonsoft.Json;
 
@@ -178,7 +180,7 @@ namespace DiscordBot.Raids
 
             //For easier debugging, format the text
 #           if DEBUG
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            Process.Start(new ProcessStartInfo
             {
                 FileName               = "clang-format",
                 Arguments              = "-style=file " +
@@ -199,7 +201,7 @@ namespace DiscordBot.Raids
                 if (File.Exists("libherrington.so")) File.Delete("libherrington.so");
 
                 //Compile the code
-                var clang = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                var clang = Process.Start(new ProcessStartInfo
                 {
                     FileName               = "clang",
                     Arguments              = "-std=c++17 -fPIC -shared -fno-exceptions -fno-rtti -O3 " +
@@ -213,7 +215,7 @@ namespace DiscordBot.Raids
                 });
 
                 //Dump output (Not reading the error stream causes trouble with outputting the shared object)
-                System.Threading.Tasks.Task.Run(async () =>
+                Task.Run(async () =>
                 {
                     using (FileStream fs = new FileStream("clang_error.txt", FileMode.Create))
                     {
@@ -263,6 +265,8 @@ namespace DiscordBot.Raids
             return this.Compositions
                        .FindIndex((c) => string.Equals(c.Name, name));
         }
+
+        //TODO: These should probably be queried from the library
 
         public int GetUserSizeInBytes()
         {
