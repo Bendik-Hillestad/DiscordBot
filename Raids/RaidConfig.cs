@@ -149,7 +149,6 @@ namespace DiscordBot.Raids
             }
 
             //End the switch
-            code += "default: UNREACHABLE;\n";
             code += "}\n";
 
             //End the public API
