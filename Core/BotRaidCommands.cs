@@ -269,7 +269,8 @@ namespace DiscordBot.Core
         private Raider[] MakeRaidComp(List<Raider> raiders, int compIdx)
         {
             //Get the roles
-            var roles     = this.raidConfig.GetRoles();
+            var roles     = this.raidConfig.GetAllRoles();
+            var filter    = this.raidConfig.GetRolesForComp(compIdx);
 
             //Get the size of the composition
             var compSize  = this.raidConfig.Compositions[compIdx].Layout.Count;
@@ -298,7 +299,7 @@ namespace DiscordBot.Core
                 roles.ForEach((role) =>
                 {
                     //Get the weight for this role
-                    float weight = r.GetRoleWeight(role);
+                    float weight = r.GetRoleWeight(role, filter);
 
                     //Adjust the weight
                     weight = weight * bias;
@@ -789,7 +790,7 @@ namespace DiscordBot.Core
         {
             //Create our regex
             var regex = this.raidConfig
-                            .GetRoles         ()
+                            .GetAllRoles      ()
                             .OrderByDescending((s) => s.Length)
                             .Aggregate        ((s, s2) => s + "|" + s2);
 
@@ -860,7 +861,7 @@ namespace DiscordBot.Core
         private string CmdRaidJoinHelp(SocketUserMessage _)
         {
             return $"To join a raid you must provide the ID for the raid and your available roles.\n" +
-                   $"The roles are {string.Join(", ", this.raidConfig.GetRoles())}. " +
+                   $"The roles are {string.Join(", ", this.raidConfig.GetAllRoles())}. " +
                    $"You can provide them in any order (for example in order of preference) " +
                    $"separated by spaces, commas or any other symbol.\n" +
                    $"For example: \"$raid join 123 DPS\". It is not case-sensitive.\n" +
@@ -926,7 +927,7 @@ namespace DiscordBot.Core
         private string CmdRaidAddHelp(SocketUserMessage _)
         {
             return $"To add someone to a raid you must provide the ID for the raid and their role(s).\n" +
-                   $"The roles are {string.Join(", ", this.raidConfig.GetRoles())}. " +
+                   $"The roles are {string.Join(", ", this.raidConfig.GetAllRoles())}. " +
                    $"You can provide them in any order (for example in order of preference) " +
                    $"separated by spaces, commas or any other symbol.\n" +
                    $"For example: \"$raid add 123 SomeGuy.1234 | DPS\". It is not case-sensitive.\n" +

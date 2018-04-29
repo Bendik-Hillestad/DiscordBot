@@ -48,16 +48,19 @@ namespace DiscordBot.Raids
             return false;
         }
 
-        public float GetRoleWeight(string role)
+        public float GetRoleWeight(string role, List<string> roleList)
         {
-            //Check if we don't have the role
-            if (!this.HasRole(role)) return 0.0f;
+            //Filter our roles first
+            var filteredRoles = this.roles.Union(roleList);
 
-            //If backup just divide the final score by this value
+            //Check if we don't have the role
+            if (!filteredRoles.Contains(role)) return 0.0f;
+
+            //If backup just divide the final score by 3
             float d = (this.IsBackup() ? 3.0f : 1.0f);
 
             //Return a simple weighting
-            return (1.0f + (string.Equals(role, this.PreferredRole) ? 0.5f : 0.0f)) / d;
+            return (1.0f + (string.Equals(role, filteredRoles.ElementAt(0)) ? 0.5f : 0.0f)) / d;
         }
 
         public bool IsBackup()

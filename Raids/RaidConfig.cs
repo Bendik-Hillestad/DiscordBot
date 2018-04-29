@@ -84,7 +84,7 @@ namespace DiscordBot.Raids
         public void GenerateSolverLibrary()
         {
             //Calculate unique roles
-            var roles = this.GetRoles();
+            var roles = this.GetAllRoles();
 
             //Prepare the string to hold the final code
             string code = "";
@@ -237,19 +237,31 @@ namespace DiscordBot.Raids
             var comp = this.Compositions.Find((c) => string.Equals(compName, c.Name)).Layout;
 
             //Count the occurrences of the roles in this comp
-            return this.GetRoles()
-                       .Select  ((r) =>
+            return this.GetAllRoles()
+                       .Select((r) =>
                        {
-                           return new KeyValuePair<string, int>(r, comp.Count((s) => string.Equals(r, s)));
+                           return new KeyValuePair<string, int>
+                           (
+                               r,
+                               comp.Count((s) => string.Equals(r, s))
+                           );
                        })
                        .ToList();
         }
 
-        public List<string> GetRoles()
+        public List<string> GetAllRoles()
         {
             return this.Compositions
                        .Select   ((desc) => desc.Layout.Distinct())
                        .Aggregate((i, j) => i.Union(j))
+                       .ToList   ();
+        }
+
+        public List<string> GetRolesForComp(int compIdx)
+        {
+            return this.Compositions
+                       .Select   ((desc) => desc.Layout.Distinct())
+                       .ElementAt(compIdx)
                        .ToList   ();
         }
 
@@ -271,7 +283,7 @@ namespace DiscordBot.Raids
         public int GetUserSizeInBytes()
         {
             //First calculate the base size
-            var baseSize = sizeof(ulong) + sizeof(float) * this.GetRoles().Count;
+            var baseSize = sizeof(ulong) + sizeof(float) * this.GetAllRoles().Count;
 
             //Add padding so that the total size is some multiple of sizeof(ulong)
             return (baseSize + sizeof(ulong)) & ~(sizeof(ulong) - 1);
