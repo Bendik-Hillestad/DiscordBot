@@ -32,22 +32,6 @@ namespace DiscordBot.Raids
             }
         }
 
-        public bool HasRole(string role)
-        {
-            //Check if our roles is null
-            if (this.roles == null) return false;
-
-            //Search through roles
-            foreach (string s in this.roles)
-            {
-                //Check for match
-                if (s == role) return true;
-            }
-
-            //Role not found
-            return false;
-        }
-
         public float GetRoleWeight(string role, List<string> roleList)
         {
             //Filter our roles first
