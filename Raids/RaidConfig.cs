@@ -286,7 +286,7 @@ namespace DiscordBot.Raids
             var baseSize = sizeof(ulong) + sizeof(float) * this.GetAllRoles().Count;
 
             //Add padding so that the total size is some multiple of sizeof(ulong)
-            return (baseSize + sizeof(ulong)) & ~(sizeof(ulong) - 1);
+            return (baseSize + sizeof(ulong) - 1) & ~(sizeof(ulong) - 1);
         }
 
         public int GetOutputBlockSizeInBytes()
