@@ -137,25 +137,6 @@ namespace DiscordBot.Raids
         }
 
         /// <summary>
-        /// Searches for an available ID to assign to a new raid.
-        /// </summary>
-        public static int GetNextAvailableRaidID()
-        {
-            //Catch any errors
-            return Debug.Try(() =>
-            {
-                //Find used raid IDs
-                var ids = EnumerateRaids().Select(r => r.raid_id);
-
-                //Create the range we will search through
-                var searchSpace = Enumerable.Range(1, ids.MaxOrDefault() + 1);
-
-                //Find the next available ID
-                return searchSpace.Except(ids).Min();
-            }, -1);
-        }
-
-        /// <summary>
         /// Initialises a new raid and returns a handle to it.
         /// </summary>
         /// <param name="owner_id">The raid owner's unique ID on Discord.</param>
@@ -166,39 +147,28 @@ namespace DiscordBot.Raids
             //Catch any errors
             return Debug.Try<RaidHandle?>(() =>
             {
+                //Get a handle to a new raid
+                var handle = CreateNewRaidHandle(offset).Value;
+
                 //Construct a Raid object
                 var raid = new Raid
                 {
                     owner_id    = owner_id,
-                    raid_id     = GetNextAvailableRaidID(),
-                    timestamp   = offset.ToUnixTimeSeconds(),
+                    raid_id     = handle.raid_id,
+                    timestamp   = handle.timestamp,
                     description = description,
                     roster      = new List<Entry>()
                 };
 
-                //Check that the ID is valid
-                Debug.Assert(raid.raid_id > 0, "Couldn't get a valid raid ID");
-
-                //Determine the folder name
-                var name = $"raid_{raid.timestamp}_{raid.raid_id}";
-
-                //Create directory for the raid
-                Directory.CreateDirectory($"./raids/{name}/");
-
                 //Create the initial raid file
-                using (var sw = File.CreateText($"./raids/{name}/raid.json"))
+                using (var sw = File.CreateText($"./raids/{handle.full_name}/raid.json"))
                 {
                     //Serialise the Raid object
                     sw.Write(JsonConvert.SerializeObject(raid, Formatting.Indented));
                 }
 
-                //Return a handle to it
-                return new RaidHandle
-                {
-                    full_name = name,
-                    raid_id   = raid.raid_id,
-                    timestamp = raid.timestamp
-                };
+                //Return the handle
+                return handle;
             }, null);
         }
 
@@ -228,7 +198,13 @@ namespace DiscordBot.Raids
             return Debug.Try(() =>
             {
                 //Setup the entry
-                var entry = new Entry { user_id = user_id, user_name = null, backup = backup, roles = roles.ToList() };
+                var entry = new Entry
+                {
+                    user_id   = user_id,
+                    user_name = null,
+                    backup    = backup,
+                    roles     = roles.ToList()
+                };
 
                 //Append the raider
                 AppendRaider(handle, entry);
@@ -355,6 +331,39 @@ namespace DiscordBot.Raids
                     return t > maxAge;
                 }).ToList().ForEach(r => DeleteRaid(r));
             });
+        }
+
+        private static RaidHandle? CreateNewRaidHandle(DateTimeOffset offset)
+        {
+            //Catch any errors
+            return Debug.Try<RaidHandle?>(() =>
+            {
+                //Find used raid IDs
+                var ids = EnumerateRaids().Select(r => r.raid_id);
+
+                //Create the range we will search through
+                var searchSpace = Enumerable.Range(1, ids.MaxOrDefault() + 1);
+
+                //Find the next available ID
+                var nextID = searchSpace.Except(ids).Min();
+
+                //Determine the timestamp
+                var timestamp = offset.ToUnixTimeSeconds();
+
+                //Determine the folder name
+                var name = $"raid_{timestamp}_{nextID}";
+
+                //Create directory for the raid
+                Directory.CreateDirectory($"./raids/{name}/");
+
+                //Return the handle to it
+                return new RaidHandle
+                {
+                    full_name = name,
+                    raid_id   = nextID,
+                    timestamp = timestamp
+                };
+            }, null);
         }
 
         private static void AppendRaider(RaidHandle handle, Entry entry)
