@@ -27,23 +27,47 @@ namespace DiscordBot.Raids
         public List<Entry> roster      { get; set; }
     }
 
-    public struct Entry : IEquatable<Entry>
+    public struct Entry
     {
         public ulong?       user_id   { get; set; }
         public string       user_name { get; set; }
         public bool         backup    { get; set; }
         public List<string> roles     { get; set; }
 
-        bool IEquatable<Entry>.Equals(Entry other)
+        public override bool Equals(object obj)
         {
-            //Check id
-            if (this.user_id != null)
+            //Cast to Entry
+            var tmp = obj as Entry?;
+
+            //Check if successful
+            if (tmp.HasValue)
             {
-                return this.user_id == other.user_id;
+                //Get the value
+                var other = tmp.Value;
+
+                //Check id
+                if (this.user_id.HasValue)
+                {
+                    return (other.user_id.HasValue) && (this.user_id.Value == other.user_id.Value);
+                }
+
+                //Check name
+                return string.Equals(this.user_name, other.user_name);
             }
 
+            //Different types
+            return false;
+        }
+
+        public override int GetHashCode()
+        {
+            //Check id
+            if (this.user_id.HasValue)  return this.user_id  .GetHashCode();
+
             //Check name
-            return string.Equals(this.user_name, other.user_name);
+            if (this.user_name != null) return this.user_name.GetHashCode();
+
+            return 0;
         }
     }
 
@@ -281,7 +305,7 @@ namespace DiscordBot.Raids
                 fs.SetLength(0);
 
                 //Remove the raider
-                raid.roster.RemoveAll((e) => e.Equals(entry));
+                raid.roster.RemoveAll(e => e.Equals(entry));
 
                 //Serialise the Raid object
                 sw.Write(JsonConvert.SerializeObject(raid, Formatting.Indented));
@@ -366,6 +390,9 @@ namespace DiscordBot.Raids
 
                 //Get the roster
                 var roster = ReadRoster(handle);
+
+                //Check if it's empty
+                if (roster.Count() == 0) return new List<Entry>();
 
                 //Find the most recent entries for each user
                 var entries = roster.Reverse().Distinct();
