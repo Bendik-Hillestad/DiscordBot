@@ -125,6 +125,20 @@ namespace DiscordBot.Raids
         }
 
         /// <summary>
+        /// Retrieves a handle to the raid matching the given id.
+        /// </summary>
+        /// <param name="raid_id">The ID of the raid.</param>
+        public static RaidHandle? GetRaidFromID(int raid_id)
+        {
+            //Catch any errors
+            return Debug.Try<RaidHandle?>(() =>
+            {
+                //Find the raid that matches the ID
+                return EnumerateRaids().First(r => r.raid_id == raid_id);
+            }, null);
+        }
+
+        /// <summary>
         /// Searches for an available ID to assign to a new raid.
         /// </summary>
         /// <returns>
@@ -204,7 +218,7 @@ namespace DiscordBot.Raids
             return Debug.Try(() =>
             {
                 //Get a handle to the raid
-                var handle = EnumerateRaids().First(r => r.raid_id == raid_id);
+                var handle = GetRaidFromID(raid_id).Value;
 
                 //Delete the raid folder and all content in it
                 Directory.Delete($"./raids/{handle.full_name}/", true);
@@ -252,7 +266,7 @@ namespace DiscordBot.Raids
             return Debug.Try(() =>
             {
                 //Get a handle to the raid
-                var handle = EnumerateRaids().First(r => r.raid_id == raid_id);
+                var handle = GetRaidFromID(raid_id).Value;
 
                 //Setup the entry
                 var entry = new Entry { user_id = user_id, user_name = null, backup = backup, roles = roles.ToList() };
@@ -275,7 +289,7 @@ namespace DiscordBot.Raids
             return Debug.Try(() =>
             {
                 //Get a handle to the raid
-                var handle = EnumerateRaids().First(r => r.raid_id == raid_id);
+                var handle = GetRaidFromID(raid_id).Value;
 
                 //Setup the entry
                 var entry = new Entry { user_id = null, user_name = user_name, backup = backup, roles = roles.ToList() };
@@ -325,7 +339,7 @@ namespace DiscordBot.Raids
             return Debug.Try(() =>
             {
                 //Get a handle to the raid
-                var handle = EnumerateRaids().First(r => r.raid_id == raid_id);
+                var handle = GetRaidFromID(raid_id).Value;
 
                 //Create a dummy entry to compare against
                 var entry = new Entry { user_id = user_id, user_name = null };
@@ -347,7 +361,7 @@ namespace DiscordBot.Raids
             return Debug.Try(() =>
             {
                 //Get a handle to the raid
-                var handle = EnumerateRaids().First(r => r.raid_id == raid_id);
+                var handle = GetRaidFromID(raid_id).Value;
 
                 //Create a dummy entry to compare against
                 var entry = new Entry { user_id = null, user_name = user_name };
@@ -386,7 +400,7 @@ namespace DiscordBot.Raids
             return Debug.Try(() =>
             {
                 //Get a handle to the raid
-                var handle = EnumerateRaids().First(r => r.raid_id == raid_id);
+                var handle = GetRaidFromID(raid_id).Value;
 
                 //Get the roster
                 var roster = ReadRoster(handle);
