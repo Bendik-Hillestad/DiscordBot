@@ -97,12 +97,10 @@ namespace DiscordBot.Raids
         }
 
         /// <summary>
-        /// Enumerates all the raids.
+        /// Returns an enumerable collection of handles
+        /// to the raids that can be used for further 
+        /// manipulation and queries.
         /// </summary>
-        /// <returns>
-        /// An enumerable collection of handles that can
-        /// be used for further manipulation and queries.
-        /// </returns>
         public static IEnumerable<RaidHandle> EnumerateRaids()
         {
             //Catch any errors
@@ -141,10 +139,6 @@ namespace DiscordBot.Raids
         /// <summary>
         /// Searches for an available ID to assign to a new raid.
         /// </summary>
-        /// <returns>
-        /// A number between 1 and <see cref="Int32.MaxValue"/> if successful,
-        /// returns -1 if the operation failed.
-        /// </returns>
         public static int GetNextAvailableRaidID()
         {
             //Catch any errors
@@ -162,15 +156,11 @@ namespace DiscordBot.Raids
         }
 
         /// <summary>
-        /// Initialises a new raid.
+        /// Initialises a new raid and returns the assigned ID.
         /// </summary>
         /// <param name="owner_id">The raid owner's unique ID on Discord.</param>
         /// <param name="offset">The time offset for when the raid starts.</param>
         /// <param name="description">The description of the raid.</param>
-        /// <returns>
-        /// Returns the assigned ID for the raid which will be in the range 1 to
-        /// <see cref="Int32.MaxValue"/> if successful, otherwise it will return -1.
-        /// </returns>
         public static int CreateRaid(ulong owner_id, DateTimeOffset offset, string description)
         {
             //Catch any errors
@@ -211,7 +201,6 @@ namespace DiscordBot.Raids
         /// Deletes the specified raid.
         /// </summary>
         /// <param name="raid_id">The ID of the raid.</param>
-        /// <returns>Returns whether the operation was successful or not.</returns>
         public static bool DeleteRaid(int raid_id)
         {
             //Catch any errors
@@ -259,7 +248,6 @@ namespace DiscordBot.Raids
         /// <param name="raid_id">The ID of the raid.</param>
         /// <param name="user_id">The user's unique ID on Discord.</param>
         /// <param name="roles">A collection of roles the user can take.</param>
-        /// <returns>Returns whether the operation was successful or not.</returns>
         public static bool AppendRaider(int raid_id, ulong user_id, bool backup, IEnumerable<string> roles)
         {
             //Catch any errors
@@ -282,7 +270,6 @@ namespace DiscordBot.Raids
         /// <param name="raid_id">The ID of the raid.</param>
         /// <param name="user_name">The user's name.</param>
         /// <param name="roles">A collection of roles the user can take.</param>
-        /// <returns>Returns whether the operation was successful or not.</returns>
         public static bool AppendRaider(int raid_id, string user_name, bool backup, IEnumerable<string> roles)
         {
             //Catch any errors
@@ -332,7 +319,6 @@ namespace DiscordBot.Raids
         /// </summary>
         /// <param name="raid_id">The ID of the raid.</param>
         /// <param name="user_id">The user's unique ID on Discord.</param>
-        /// <returns>Returns whether the operation was successful or not.</returns>
         public static bool RemoveRaider(int raid_id, ulong user_id)
         {
             //Catch any errors
@@ -354,7 +340,6 @@ namespace DiscordBot.Raids
         /// </summary>
         /// <param name="raid_id">The ID of the raid.</param>
         /// <param name="user_name">The user's name.</param>
-        /// <returns>Returns whether the operation was successful or not.</returns>
         public static bool RemoveRaider(int raid_id, string user_name)
         {
             //Catch any errors
@@ -385,15 +370,10 @@ namespace DiscordBot.Raids
         }
 
         /// <summary>
-        /// Takes the full record of entries and coalesces it
-        /// into a single list with unique entries and the most
-        /// recent values.
-        /// </summary>
-        /// <param name="raid_id">The ID of the raid.</param>
-        /// <returns>
         /// Returns a distinct list of raiders with the most
         /// up-to-date values.
-        /// </returns>
+        /// </summary>
+        /// <param name="raid_id">The ID of the raid.</param>
         public static List<Entry> CoalesceRaiders(int raid_id)
         {
             //Catch any errors
@@ -421,10 +401,7 @@ namespace DiscordBot.Raids
         /// <summary>
         /// Removes old raid files.
         /// </summary>
-        /// <param name="maxAge">
-        /// The allowed age before the file is removed.
-        /// Starts counting after start of raid.
-        /// </param>
+        /// <param name="maxAge">The maximum allowed age.</param>
         public static bool CleanRaidFiles(TimeSpan maxAge)
         {
             //Catch any errors
