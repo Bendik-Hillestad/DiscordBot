@@ -119,7 +119,7 @@ namespace DiscordBot.Raids
                                     timestamp = long.Parse(r.Groups[1].Value),
                                     raid_id   = int .Parse(r.Groups[2].Value)
                                 });
-            }, new RaidHandle[]{ });
+            }, new List<RaidHandle>());
         }
 
         /// <summary>
