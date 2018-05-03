@@ -56,6 +56,9 @@ namespace DiscordBot.Utils
                     } break;
                 }
 
+                //If error we also notify the owner
+                if (severity == LOG_LEVEL.ERROR) DiscordBot.Core.Bot.GetBotInstance().NotifyOwner($"[{DateTime.Now}| {severity,8}] {method},{lineNumber}: {message}");
+
                 //Write message
                 Console.WriteLine($"[{DateTime.Now}| {severity,8}] {method},{lineNumber}: {message}");
 

@@ -56,7 +56,7 @@ namespace DiscordBot
             t.Start();
 
             //Run bot
-            await (new Bot()).Run();
+            await Bot.GetBotInstance().Run();
         }
     }
 }

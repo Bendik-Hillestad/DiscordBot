@@ -178,6 +178,8 @@ namespace DiscordBot.Raids
             //Create the source file
             File.WriteAllText("./libherrington/dllmain.cpp", code);
 
+            return;
+
             //For easier debugging, format the text
 #           if DEBUG
             Process.Start(new ProcessStartInfo

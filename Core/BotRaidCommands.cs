@@ -18,14 +18,6 @@ namespace DiscordBot.Core
 {
     public sealed partial class Bot
     {
-        //private static readonly string RAID_CALENDAR_FILE = "raid_calendar.xml";
-
-        private struct QueuedMessage
-        {
-            public ulong  userID;
-            public string text;
-        }
-
         [CommandInit]
         private void ConstructRaidCommands()
         {
@@ -165,22 +157,6 @@ namespace DiscordBot.Core
                 (
                     new Command
                     (
-                        "notify", this, "CmdRaidNotifyRemove", "CmdRaidNotifyHelp",
-                        "remove", @"remove(?:$|\s)"
-                    )
-                )
-                .RegisterCommand
-                (
-                    new Command
-                    (
-                        "notify", this, "CmdRaidNotify", "CmdRaidNotifyHelp",
-                        "times", @"(.+?)$"
-                    )
-                )
-                .RegisterCommand
-                (
-                    new Command
-                    (
                         "make", this, "CmdRaidMakeComp", "CmdRaidMakeCompHelp",
                         "comp", @"comp(?:$|\s)",
                         "name", @"(\w+)(?:$|\s)",
@@ -222,9 +198,6 @@ namespace DiscordBot.Core
                     )
                 )
             );
-
-            //Create list to hold important messages
-            this.importantMessages = new List<QueuedMessage>();
 
             //Initialise raid manager
             RaidManager.Initialise();
@@ -341,306 +314,6 @@ namespace DiscordBot.Core
             return result;
         }
 
-        private void SendDM(ulong userID, string text)
-        {
-            //Create DM channel
-            client.GetUser(userID).GetOrCreateDMChannelAsync()
-            .ContinueWith((t) =>
-            {
-                //Send message
-                t.Result.SendMessageAsync(text).GetAwaiter().GetResult();
-            }, TaskContinuationOptions.OnlyOnRanToCompletion).GetAwaiter().GetResult();
-        }
-
-        private void QueueImportantMessage(ulong userID, string text)
-        {
-            //Lock to prevent race conditions
-            lock (this.importantMessageLock)
-            {
-                //Insert message into list
-                this.importantMessages.Add(new QueuedMessage { userID = userID, text = text });
-            }
-
-            //Catch any exceptions
-            try
-            {
-                //Launch a thread that tries to send the message within 5 seconds
-                var tokenSource = new CancellationTokenSource();
-                var token       = tokenSource.Token;
-                var task        = Task.Run(() =>
-                {
-                    //Grab the thread handle
-                    var thread = Thread.CurrentThread;
-
-                    //Set it to abort when cancellation is requested
-                    using (token.Register(thread.Abort))
-                    {
-                        //Check if we're connected
-                        while (this.client.ConnectionState != ConnectionState.Connected) Thread.Sleep(100);
-
-                        //Send the message
-                        this.SendDM(userID, text);
-                    }
-                }, token);
-
-                //Allow 5 seconds for the message to be sent
-                tokenSource.CancelAfter(5000);
-                task.Wait(token);
-            }
-            catch (AggregateException ae)
-            {
-                //Get errors
-                ae.Handle((ex) =>
-                {
-                    //Log error
-                    Logger.Log(LOG_LEVEL.ERROR, ex.Message);
-
-                    //Mark as handled
-                    return true;
-                });
-            }
-            catch (Exception ex)
-            {
-                //Log error
-                Logger.Log(LOG_LEVEL.ERROR, ex.Message);
-            }
-        }
-
-        private void ResendImportantMessages()
-        {
-            //Acquire a lock to prevent race conditions
-            QueuedMessage[] messages = null;
-            lock (this.importantMessageLock)
-            {
-                //Just stop if there are no messages
-                if (this.importantMessages.Count == 0) return;
-
-                //Make a local copy of the messages
-                messages = new QueuedMessage[this.importantMessages.Count];
-                this.importantMessages.CopyTo(messages);
-            }
-
-            //Catch any exceptions
-            try
-            {
-                //Launch a thread that attempts to send as many as possible within 5 seconds
-                var tokenSource = new CancellationTokenSource();
-                var token       = tokenSource.Token;
-                var task        = Task.Factory.StartNew(() =>
-                {
-                    //Grab the thread handle
-                    var thread = Thread.CurrentThread;
-
-                    //Set it to abort when cancellation is requested
-                    using (token.Register(thread.Abort))
-                    {
-                        //Iterate over messages
-                        for (int i = 0; i < messages.Length; i++)
-                        {
-                            //Send the message
-                            this.SendDM(messages[i].userID, messages[i].text);
-                        }
-                    }
-                }, token);
-
-                //Allow 5 seconds for the messages to be sent
-                tokenSource.CancelAfter(5000);
-                task.Wait(token);
-            }
-            catch (AggregateException ae)
-            {
-                //Get errors
-                ae.Handle((ex) =>
-                {
-                    //Log error
-                    Logger.Log(LOG_LEVEL.ERROR, ex.Message);
-
-                    //Mark as handled
-                    return true;
-                });
-            }
-            catch (Exception ex)
-            {
-                //Log error
-                Logger.Log(LOG_LEVEL.ERROR, ex.Message);
-            }
-        }
-
-        public void StartNotificationsCheck()
-        {
-            /*//Launch monitor thread
-            var monitor = Task.Factory.StartNew(async () =>
-            {
-                begin:
-
-                //TODO: Remove all of this crap and rely on Discord.NET?
-
-                //Catch any errors
-                try
-                {
-                    //Launch work thread
-                    var thread = await Task.Factory.StartNew(async () =>
-                    {
-                        //Begin heartbeat
-                        var heartbeat        = true;
-                        var heartbeatChannel = await client.GetUser(this.ownerID).GetOrCreateDMChannelAsync();
-                        var heartbeatMsg     = await heartbeatChannel.SendMessageAsync("Heartbeat: .");
-
-                        //Define our delta time
-                        var dt = TimeSpan.FromSeconds(30);
-
-                        //Get current time
-                        var now = DateTime.UtcNow;
-
-                        //Get the time for next check
-                        var next = now + dt;
-
-                        //Loop forever
-                        while (true)
-                        {
-                            //Resend any important messages
-                            this.ResendImportantMessages();
-
-                            //TODO: Thread safety
-                            //Check if we need to notify anyone
-                            var list = this.raidCalendar.CheckReminders(now, next);
-                            if ((list?.Count ?? 0) > 0)
-                            {
-                                Logger.Log(LOG_LEVEL.INFO, "NOTIFYING " + list.Count + " USER(S).");
-
-                                //Iterate over notifications
-                                foreach (var notification in list)
-                                {
-                                    Logger.Log(LOG_LEVEL.INFO, "LAUNCHING THREAD!");
-
-                                    //TODO: Just have one thread, use a semaphore, sort notifications and just iterate through them
-                                    //Launch a thread that notifies the user at the right time
-                                    var task = Task.Run(async () =>
-                                    {
-                                        await this.NotifyUser
-                                        (
-                                            notification.raidID, notification.userID,
-                                            notification.time,   notification.hours,
-                                            notification.minutes
-                                        );
-                                    });
-                                }
-                            }
-
-                            //Refresh channel
-                            heartbeatChannel = await client.GetUser(this.ownerID).GetOrCreateDMChannelAsync();
-
-                            //Edit message
-                            heartbeat = !heartbeat;
-                            await heartbeatMsg.ModifyAsync((prop) => prop.Content = "Heartbeat: " + (heartbeat ? "." : ". ."));
-
-                            //Wait
-                            var wait = (next - DateTime.UtcNow);
-                            if (wait > TimeSpan.Zero) await Task.Delay(wait);
-
-                            //Update current time
-                            now = next;
-
-                            //Update time for next check
-                            next = DateTime.UtcNow + dt;
-                        }
-                    }, TaskCreationOptions.LongRunning);
-
-                    //Wait
-                    thread.Wait();
-                }
-                catch (AggregateException ae)
-                {
-                    //Get errors
-                    ae.Handle((ex) =>
-                    {
-                        //Log error
-                        Logger.Log(LOG_LEVEL.ERROR, ex.Message);
-
-                        //Mark as handled
-                        return true;
-                    });
-                }
-                catch (Exception ex)
-                {
-                    //Log error
-                    Logger.Log(LOG_LEVEL.ERROR, ex.Message);
-                }
-
-                //Wait one second
-                Thread.Sleep(1000);
-
-                //Restart
-                Logger.Log(LOG_LEVEL.INFO, "Restarting notification checker.");
-                goto begin;
-            }, TaskCreationOptions.LongRunning).GetAwaiter().GetResult()
-            //Capture exit
-            .ContinueWith((t) =>
-            {
-                //Get errors
-                t?.Exception?.Handle((ex) =>
-                {
-                    //Log error
-                    Logger.Log(LOG_LEVEL.ERROR, ex.Message);
-
-                    //Mark as handled
-                    return true;
-                });
-
-                //Log exit
-                Logger.Log(LOG_LEVEL.ERROR, "Notification checker exited!");
-            });*/
-        }
-
-        private async Task NotifyUser(int raidID, ulong userID, DateTime alarm, int hours, int minutes)
-        {
-            /*Logger.Log(LOG_LEVEL.INFO, "Notifying user #" + userID + " in " + (int)(alarm - DateTime.UtcNow).TotalSeconds + " seconds.");
-            
-            //Try to find a recommended role
-            string role = null;
-            try
-            {
-                //Generate comp
-                Raider[] comp = this.GenerateComp(raidID, 0, out var unused);
-                
-                //Iterate over comp
-                for (int i = 0; i < 10; i++)
-                {
-                    //Check if it's the right user
-                    if ((comp[i]?.ID ?? 0) == userID)
-                    {
-                        //Save the role
-                        role = (i < 2) ? "MES" : ((i < 4) ? "HEAL" : ((i < 8) ? "DPS" : "SLAVE"));
-                    }
-                }
-            }
-            catch { }
-
-            //Format hours and minutes
-            var time = Utility.FormatTime(hours, minutes);
-
-            //Wait for right time
-            var wait = alarm - DateTime.UtcNow;
-            if (wait > TimeSpan.Zero) await Task.Delay(wait);
-
-            //Try to send the message
-            try
-            {
-                Logger.Log(LOG_LEVEL.INFO, "Notifying user #" + userID + ".");
-
-                //Setup notification text
-                var text = (string.IsNullOrWhiteSpace(time) ?
-                            "The raid has started." :
-                            "The raid starts in " + time + ".") +
-                            ((!string.IsNullOrWhiteSpace(role)) ?
-                            "\nYour suggested role is **" + role + "**." : "");
-
-                //Queue message
-                this.QueueImportantMessage(userID, text);
-            }
-            catch { }*/
-        }
-
         private string CmdRaidCreate(SocketUserMessage msg, int day, int month, int hours, int minutes, char sign, int utc, string desc)
         {
             //Apply sign to timezone
@@ -689,6 +362,7 @@ namespace DiscordBot.Core
             //Find the raid
             var handle = RaidManager.GetRaidFromID(raidID);
 
+            //Check if valid
             if (!handle.HasValue) return "No raid with that ID.";
 
             //Get the owner
@@ -721,6 +395,7 @@ namespace DiscordBot.Core
             //Get a handle to the raid
             var handle = RaidManager.GetRaidFromID(raidID);
 
+            //Check if valid
             if (!handle.HasValue) return "No raid with that ID.";
 
             //Get the roles
@@ -752,6 +427,7 @@ namespace DiscordBot.Core
             //Get a handle to the raid
             var handle = RaidManager.GetRaidFromID(raidID);
 
+            //Check if valid
             if (!handle.HasValue) return "No raid with that ID.";
 
             //Get the raiders
@@ -824,12 +500,10 @@ namespace DiscordBot.Core
             //Check that we got at least one
             if ((roles?.Count ?? 0) > 0)
             {
-                //Get the username/nickname
-                string name = (msg.Author as SocketGuildUser)?.Nickname ?? msg.Author.Username;
-
                 //Get a handle to the raid
                 var handle = RaidManager.GetRaidFromID(raidID);
 
+                //Check if valid
                 if (!handle.HasValue) return "No raid with that ID.";
 
                 //Add to the raid
@@ -875,7 +549,7 @@ namespace DiscordBot.Core
                    $"**You can omit the id to simply join the first raid.**";
         }
 
-        private string CmdRaidAdd(SocketUserMessage msg, int raidID, string name, string roleList)
+        private string CmdRaidAdd(SocketUserMessage _, int raidID, string name, string roleList)
         {
             //Get the roles
             var roles = this.GetRoles(roleList);
@@ -891,20 +565,16 @@ namespace DiscordBot.Core
             //Check that we got at least one
             if ((roles?.Count ?? 0) > 0)
             {
-                //Try to add to the raid
-                if (this.raidCalendar.AddRaider(raidID, Utility.RandomUInt64(), name, roles, bu))
-                {
-                    //Save raid calendar
-                    RaidCalendar.SaveToFile(this.raidCalendar, RAID_CALENDAR_FILE);
+                //Get a handle to the raid
+                var handle = RaidManager.GetRaidFromID(raidID);
 
-                    //Return success
-                    return $"They were added to the raid{(bu ? " as backup" : "")} with these roles: \"{string.Join(", ", roles)}\".";
-                }
-                else
-                {
-                    //Return error
-                    return "No raid with ID \"" + raidID + "\" found. Type \"$raid list\" if you need to find the ID.";
-                }
+                //Check if valid
+                if (!handle.HasValue) return "No raid with that ID.";
+
+                //Add to the raid
+                RaidManager.AppendRaider(handle.Value, name, bu, roles);
+
+                return $"They were added to the raid{(bu ? " as backup" : "")} with these roles: \"{string.Join(", ", roles)}\".";
             }
             else
             {
@@ -915,45 +585,44 @@ namespace DiscordBot.Core
 
         private string CmdRaidAddSimple(SocketUserMessage msg, string name, string roleList)
         {
-            //Check if there is at least one raid being organised right now
-            if (this.raidCalendar.GetNumberOfRaidEvents() > 0)
+            try
             {
-                //Get the ID for the first event
-                int raidID = this.raidCalendar.GetFirstEvent().ID;
+                //Get the next raid
+                var handle = RaidManager.EnumerateRaids()
+                                        .OrderBy(r => r.timestamp)
+                                        .First  ();
 
                 //Pass on to the full implementation
-                return this.CmdRaidAdd(msg, raidID, name, roleList);
+                return this.CmdRaidAdd(msg, handle.raid_id, name, roleList);
             }
-
-            //Return error
-            return "There are no raids being organised right now.";
+            catch
+            {
+                //Return error
+                return "There are no raids being organised right now.";
+            }
         }
 
         private string CmdRaidAddHelp(SocketUserMessage _)
         {
-            return $"To add someone to a raid you must provide the ID for the raid and their role(s).\n" +
-                   $"The roles are {string.Join(", ", this.raidConfig.GetAllRoles())}. " +
-                   $"You can provide them in any order (for example in order of preference) " +
-                   $"separated by spaces, commas or any other symbol.\n" +
-                   $"For example: \"$raid add 123 SomeGuy.1234 | DPS\". It is not case-sensitive.\n" +
-                   $"If you do not know the ID for the raid, type \"$raid list\" to find it.\n" +
-                   $"**You can omit the id to simply join the first raid.**";
+            return $"raid add [ID] [Name] | [Roles]\n" +
+                   $"\t ID - (Optional) The ID of the raid you wish to join\n" +
+                   $"\t Name - The name of the person to add\n" +
+                   $"\t Roles - The roles the person can take";
         }
 
         private string CmdRaidLeave(SocketUserMessage msg, int raidID)
         {
-            //Try to remove from the raid
-            if (this.raidCalendar.RemoveRaider(raidID, msg.Author.Id))
-            {
-                //Save raid calendar
-                RaidCalendar.SaveToFile(this.raidCalendar, RAID_CALENDAR_FILE);
+            //Get a handle to the raid
+            var handle = RaidManager.GetRaidFromID(raidID);
 
-                //Return success
-                return "You were removed from the roster.\n";
-            }
+            //Check if valid
+            if (!handle.HasValue) return "No raid with that ID.";
 
-            //Return failure
-            return "Couldn't find you in a raid with that ID (" + raidID + ").";
+            //Remove from the raid
+            RaidManager.RemoveRaider(handle.Value, msg.Author.Id);
+
+            //Return success
+            return "You were removed from the roster.\n";
         }
 
         private string CmdRaidLeaveHelp(SocketUserMessage _)
@@ -966,31 +635,23 @@ namespace DiscordBot.Core
 
         private string CmdRaidKick(SocketUserMessage msg, int raidID, string name)
         {
-            //Get the event
-            var e = this.raidCalendar.FindEvent(raidID);
+            //Get a handle to the raid
+            var handle = RaidManager.GetRaidFromID(raidID);
 
-            //Check if it's null
-            if (e == null)
-            {
-                //Return failure
-                return $"Couldn't find a raid with that ID ({raidID}).";
-            }
+            //Check if valid
+            if (!handle.HasValue) return "No raid with that ID.";
+
+            //Get the owner
+            var ownerID = RaidManager.GetRaidData(handle.Value).Value.owner_id;
 
             //Check if the user is the owner
-            if (e.Owner == msg.Author.Id)
+            if (msg.Author.Id == ownerID)
             {
-                //Try to remove from the raid
-                if (this.raidCalendar.RemoveRaider(raidID, name))
-                {
-                    //Save raid calendar
-                    RaidCalendar.SaveToFile(this.raidCalendar, RAID_CALENDAR_FILE);
+                //Remove from the raid
+                RaidManager.RemoveRaider(handle.Value, name);
 
-                    //Return success
-                    return "You were removed from the roster.\n";
-                }
-
-                //Return failure
-                return "Couldn't find that player in the raid.";
+                //Return success
+                return "They were removed from the roster.\n";
             }
             else
             {
@@ -1007,120 +668,29 @@ namespace DiscordBot.Core
                    "For example: \"$raid kick 123 SomeGuy\"";
         }
 
-        private string CmdRaidNotify(SocketUserMessage msg, string notification)
+        private Entry?[] GenerateComp(RaidHandle handle, int compIdx, out List<Entry> unused)
         {
-            //Get the hours and minutes
-            var times = Utility.GetClockTimes(notification);
-                
-            //Check that it's not null
-            if (times != null)
-            {
-                //Prepare result string
-                string ret    = "You will be notified";
-                string indent = " ";
-                if (times.Count > 1)
-                {
-                    ret   += "\n";
-                    indent = "\t";
-                }
+            //Get the raiders
+            var raiders = RaidManager.CoalesceRaiders(handle);
 
-                //Get each clock time
-                int n = 0;
-                var reminders = new Reminder[times.Count];
-                foreach (Tuple<int, int> clock in times)
-                {
-                    //Get hours and minutes
-                    int hours   = clock.Item1;
-                    int minutes = clock.Item2;
+            //Send to solver
+            var comp = this.MakeRaidComp(raiders, compIdx);
 
-                    //Insert reminder
-                    reminders[n++] = new Reminder(msg.Author.Id, hours, minutes);
+            //Get anyone that is not included
+            unused = raiders.Where(e => !comp.Contains(e)).ToList();
 
-                    //Check if hours and minutes are zero
-                    if (hours == 0 && minutes == 0)
-                    {
-                        //Insert simplified message
-                        ret += indent + "when the raid starts.\n";
-                    }
-                    else
-                    {
-                        //Format hours and minutes
-                        var time = indent + Utility.FormatTime(hours, minutes);
-
-                        //Insert message
-                        ret += time + " before the raid.\n";
-                    }
-                }
-
-                //Add reminders to calendar
-                this.raidCalendar.AddReminders(reminders);
-
-                //Save raid calendar
-                RaidCalendar.SaveToFile(this.raidCalendar, RAID_CALENDAR_FILE);
-
-                //Return resulting message
-                return ret;
-            }
-
-            //Return error
-            return "The times must be given in a HH:MM format.\n" +
-                   "Type \"$raid notify\" for more info.";
+            //Return the comp
+            return comp;
         }
 
-        private string CmdRaidNotifyRemove(SocketUserMessage msg)
+        private string CmdRaidMakeComp(SocketUserMessage ctx, string name, int raidID)
         {
-            //Remove notification
-            this.raidCalendar.RemoveReminders(msg.Author.Id);
+            //Get a handle to the raid
+            var handle = RaidManager.GetRaidFromID(raidID);
 
-            //Save raid calendar
-            RaidCalendar.SaveToFile(this.raidCalendar, RAID_CALENDAR_FILE);
+            //Check if valid
+            if (!handle.HasValue) return "No raid with that ID.";
 
-            //Reply with success
-            return "You will no longer be notified before a raid.";
-        }
-
-        private string CmdRaidNotifyHelp(SocketUserMessage _)
-        {
-            return "If you wish to be notified before a raid you've signed up for, " +
-                   "provide the hours and minutes before the raid you wish to be notified " +
-                   "separated by a colon.\n" +
-                   "For example: \"$raid notify 01:00\".\n" +
-                   "You can use the command again to change it.\n" +
-                   "If you no longer wish to be notified, simply type \"remove\" " +
-                   "instead of hours and minutes.\n" +
-                   "Like so: \"$raid notify remove\"";
-        }
-
-        private Raider[] GenerateComp(int raidID, int compIdx, out List<Raider> unused)
-        {
-            //Try to get the raiders
-            var raiders = this.raidCalendar.GetRaiders(raidID);
-            var tmp = new List<Raider>();
-
-            //Check that there is at least one
-            if ((raiders?.Count ?? 0) > 0)
-            {
-                //Pass a copy of the raider list to our solver
-                var comp = this.MakeRaidComp(raiders, compIdx);
-
-                //Check if anyone is not included
-                foreach (Raider r in raiders)
-                {
-                    if (r != null && !Array.Exists(comp, e => r.ID == e?.ID)) tmp.Add(r);
-                }
-
-                //Return the composition + unused list
-                unused = tmp;
-                return comp;
-            }
-
-            //Return failure
-            unused = tmp;
-            return null;
-        }
-
-        private string CmdRaidMakeComp(SocketUserMessage _, string name, int raidID)
-        {
             //Find the comp
             int compIdx = this.raidConfig.GetCompIndex(name.ToUpper());
 
@@ -1128,7 +698,7 @@ namespace DiscordBot.Core
             if (compIdx != -1)
             {
                 //Generate composition
-                var bestComp = this.GenerateComp(raidID, compIdx, out var unused);
+                var bestComp = this.GenerateComp(handle.Value, compIdx, out var unused);
 
                 //Check that it's not null
                 if (bestComp != null)
@@ -1143,15 +713,15 @@ namespace DiscordBot.Core
                                          //Prepare the string for this role
                                          var output = $"{val.Key}:\n    ";
 
-                                         //Iterate over the area we we care about for this role
+                                         //Iterate over the area we care about for this role
                                          var tmp = new List<string>();
                                          for (int i = 0; i < val.Value; i++)
                                          {
                                              //Check that this slot is not empty
-                                             if (bestComp[offset + i] != null)
+                                             if (bestComp[offset + i].HasValue)
                                              {
                                                  //Add raider
-                                                 tmp.Add(bestComp[offset + i].nick);
+                                                 tmp.Add(this.GetUserName(ctx, bestComp[offset + i].Value.user_id.Value));
                                              }
                                              else tmp.Add("<empty>");
                                          }
@@ -1166,7 +736,7 @@ namespace DiscordBot.Core
 
                     //Return the comp
                     return "This is the best comp I could make:\n" + text +
-                          (unused.Count > 0 ? "\n\nNot included:\n" + string.Join('\n', unused.Select(e => e.nick)) : string.Empty);
+                          (unused.Count > 0 ? "\n\nNot included:\n" + string.Join('\n', unused.Select(e => this.GetUserName(ctx, e.user_id.Value))) : string.Empty);
                 }
 
                 //Return failure
@@ -1181,34 +751,40 @@ namespace DiscordBot.Core
 
         private string CmdRaidMakeCompSimple(SocketUserMessage msg, string name)
         {
-            //Check if there is at least one raid being organised right now
-            if (this.raidCalendar.GetNumberOfRaidEvents() > 0)
+            try
             {
-                //Get the ID for the first event
-                int raidID = this.raidCalendar.GetFirstEvent().ID;
+                //Get the next raid
+                var handle = RaidManager.EnumerateRaids()
+                                        .OrderBy(r => r.timestamp)
+                                        .First  ();
 
                 //Pass on to the full implementation
-                return this.CmdRaidMakeComp(msg, name, raidID);
+                return this.CmdRaidMakeComp(msg, name, handle.raid_id);
             }
-
-            //Return error
-            return "There are no raids being organised right now.";
+            catch
+            {
+                //Return error
+                return "There are no raids being organised right now.";
+            }
         }
 
         private string CmdRaidMakeCompSimplest(SocketUserMessage msg)
         {
-            //Check if there is at least one raid being organised right now
-            if (this.raidCalendar.GetNumberOfRaidEvents() > 0)
+            try
             {
-                //Get the ID for the first event
-                int raidID = this.raidCalendar.GetFirstEvent().ID;
+                //Get the next raid
+                var handle = RaidManager.EnumerateRaids()
+                                        .OrderBy(r => r.timestamp)
+                                        .First();
 
                 //Pass on to the full implementation
-                return this.CmdRaidMakeComp(msg, "DEFAULT", raidID);
+                return this.CmdRaidMakeComp(msg, "DEFAULT", handle.raid_id);
             }
-
-            //Return error
-            return "There are no raids being organised right now.";
+            catch
+            {
+                //Return error
+                return "There are no raids being organised right now.";
+            }
         }
 
         private string CmdRaidMakeCompHelp(SocketUserMessage _)
@@ -1224,7 +800,7 @@ namespace DiscordBot.Core
         {
             //Get all the roles (including duplicates)
             var roles = Regex.Matches(comp, @"\w+")
-                             .Select ((r) => r.Value.ToUpper())
+                             .Select (r => r.Value.ToUpper())
                              .ToList ();
 
             //Check that at least one was provided
@@ -1270,8 +846,9 @@ namespace DiscordBot.Core
                    "    $raid roster [ID]\n" +
                    "    $raid list\n" +
                    "    $raid join [ID Roles]\n" +
+                   "    $raid add [ID Name | Roles]\n" +
                    "    $raid leave [ID]\n" +
-                   "    $raid notify [HH:MM]\n" +
+                   "    $raid kick [ID Name]\n" +
                    "    $raid make comp [ID]\n" +
                    "    $raid help\n" +
                    "\n" +
@@ -1291,8 +868,6 @@ namespace DiscordBot.Core
                    "Pro-tip: You can also whisper me (Left click me and type your command).";
         }
 
-        private RaidConfig          raidConfig;
-        private List<QueuedMessage> importantMessages;
-        private object              importantMessageLock = new object();
+        private RaidConfig raidConfig;
     }
 }
