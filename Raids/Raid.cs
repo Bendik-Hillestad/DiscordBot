@@ -27,50 +27,6 @@ namespace DiscordBot.Raids
         public List<Entry> roster      { get; set; }
     }
 
-    public struct Entry
-    {
-        public ulong?       user_id   { get; set; }
-        public string       user_name { get; set; }
-        public bool         backup    { get; set; }
-        public List<string> roles     { get; set; }
-
-        public override bool Equals(object obj)
-        {
-            //Cast to Entry
-            var tmp = obj as Entry?;
-
-            //Check if successful
-            if (tmp.HasValue)
-            {
-                //Get the value
-                var other = tmp.Value;
-
-                //Check id
-                if (this.user_id.HasValue)
-                {
-                    return (other.user_id.HasValue) && (this.user_id.Value == other.user_id.Value);
-                }
-
-                //Check name
-                return string.Equals(this.user_name, other.user_name);
-            }
-
-            //Different types
-            return false;
-        }
-
-        public override int GetHashCode()
-        {
-            //Check id
-            if (this.user_id.HasValue)  return this.user_id  .GetHashCode();
-
-            //Check name
-            if (this.user_name != null) return this.user_name.GetHashCode();
-
-            return 0;
-        }
-    }
-
     public static class RaidManager
     {
         private static T MaxOrDefault<T>(this IEnumerable<T> enumeration) where T : struct
@@ -120,6 +76,27 @@ namespace DiscordBot.Raids
                                     raid_id   = int .Parse(r.Groups[2].Value)
                                 });
             }, new List<RaidHandle>());
+        }
+
+        /// <summary>
+        /// Gets a read-only view of the data for a given raid.
+        /// </summary>
+        /// <param name="handle">The handle to the raid.</param>
+        public static Raid? GetRaidData(RaidHandle handle)
+        {
+            //Catch any errors
+            return Debug.Try<Raid?>(() =>
+            {
+                //Open the raid file
+                using (FileStream fs = File.Open($"./raids/{handle.full_name}/raid.json", FileMode.Open, FileAccess.Read, FileShare.None))
+                {
+                    //Get a UTF-8 encoded text stream
+                    StreamReader sr = new StreamReader(fs, Encoding.UTF8);
+
+                    //Deserialise the JSON and return the roster
+                    return JsonConvert.DeserializeObject<Raid>(sr.ReadToEnd());
+                }
+            }, null);
         }
 
         /// <summary>
