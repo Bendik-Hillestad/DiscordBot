@@ -312,24 +312,20 @@ namespace DiscordBot.Core
                    "For example: \"$raid roster 123 MES HEAL\".";
         }
 
-        private string CmdRaidList(SocketUserMessage _)
+        private string CmdRaidList(SocketUserMessage msg)
         {
-            //Generate the list of events
-            var events = RaidManager.EnumerateRaids()
-                                    .Select(r => RaidManager.GetRaidData(r))
-                                    .Select(r => $"[{r?.raid_id}] - {r?.description}");
-
-            //Check that there is at least one
-            if (events.Count() > 0)
-            {
-                return "These are the raids being organised right now:\n" + string.Join("\n", events);
-            }
-
-            return "There are no planned raids right now.";
+            //Just pass on to implementation (in the future we might filter based on context)
+            return CmdRaidList_Implementation(msg);
         }
 
         private string CmdRaidJoin(SocketUserMessage msg, int raidID, string roleList)
         {
+            //Get a handle to the raid
+            var handle = RaidManager.GetRaidFromID(raidID);
+
+            //Check if valid
+            if (!handle.HasValue) return "No raid with that ID.";
+
             //Get the roles
             var roles = this.GetRoles(roleList);
             bool bu = false;
@@ -341,25 +337,8 @@ namespace DiscordBot.Core
                 bu = true;
             }
 
-            //Check that we got at least one
-            if ((roles?.Count ?? 0) > 0)
-            {
-                //Get a handle to the raid
-                var handle = RaidManager.GetRaidFromID(raidID);
-
-                //Check if valid
-                if (!handle.HasValue) return "No raid with that ID.";
-
-                //Add to the raid
-                RaidManager.AppendRaider(handle.Value, msg.Author.Id, bu, roles);
-
-                return $"You were added to the raid{(bu ? " as backup" : "")} with these roles: \"{string.Join(", ", roles)}\".";
-            }
-            else
-            {
-                //Return error
-                return "No roles provided. Type \"$raid join\" if you need help with this command.";
-            }
+            //Pass on to implementation
+            return CmdRaidJoin_Implementation(msg, handle.Value, bu, roles);
         }
 
         private string CmdRaidJoinSimple(SocketUserMessage msg, string roleList)
@@ -368,14 +347,21 @@ namespace DiscordBot.Core
             var handle = RaidManager.GetNextRaid();
 
             //Check if valid
-            if (handle.HasValue)
+            if (!handle.HasValue) return "No raids to join.";
+
+            //Get the roles
+            var roles = this.GetRoles(roleList);
+            bool bu = false;
+
+            //Check if one of the roles is BACKUP
+            if (roleList.ToUpper().Contains("BACKUP"))
             {
-                //Pass on to the full implementation
-                return this.CmdRaidJoin(msg, handle.Value.raid_id, roleList);
+                //Set flag
+                bu = true;
             }
 
-            //Return error
-            return "There are no raids being organised right now.";
+            //Pass on to implementation
+            return CmdRaidJoin_Implementation(msg, handle.Value, bu, roles);
         }
 
         private string CmdRaidJoinHelp(SocketUserMessage _)

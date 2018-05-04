@@ -202,5 +202,40 @@ namespace DiscordBot.Core
             //None found
             return "Result: None";
         }
+
+        private string CmdRaidList_Implementation(SocketUserMessage msg)
+        {
+            //Generate the list of events
+            var events = RaidManager.EnumerateRaids()
+                                    .Select(r => RaidManager.GetRaidData(r))
+                                    .Select(r => $"[{r?.raid_id}] - {r?.description}")
+                                    .ToList();
+
+            //Check if there are any
+            if (events.Count > 0)
+            {
+                //Return list
+                return $"Result:\n{string.Join("\n", events)}";
+            }
+
+            //None found
+            return "Result: None";
+        }
+
+        private string CmdRaidJoin_Implementation(SocketUserMessage msg, RaidHandle handle, bool backup, List<string> roles)
+        {
+            //Check that we got any roles
+            if (roles.Count > 0)
+            {
+                //Add to the raid
+                RaidManager.AppendRaider(handle, msg.Author.Id, backup, roles);
+
+                //Return success
+                return $"You were added to the raid{(backup ? " as backup" : "")} with these roles: \"{string.Join(", ", roles)}\".";
+            }
+
+            //Return missing roles error
+            return "No recognized roles provided.";
+        }
     }
 }
