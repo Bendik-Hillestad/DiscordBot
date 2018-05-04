@@ -27,8 +27,8 @@ namespace DiscordBot.Core
                 DefaultRetryMode  = Discord.RetryMode.AlwaysRetry
             });
 
-            //Initialize to null
-            this.config            = null;
+            //Setup empty config
+            this.config            = new Config();
 
             //Prepare the list holding command categories
             this.commandCategories = new List<CommandCategory>();
@@ -75,10 +75,10 @@ namespace DiscordBot.Core
         public async Task Run()
         {
             //Read the config
-            this.config = Config.ReadConfig() ?? new Dictionary<string, string>();
+            this.config = Config.ReadConfig().Value;
 
             //Get the owner
-            this.ownerID = ulong.Parse(this.config["OwnerID"]);
+            this.ownerID = this.config.discord_owner_id;
 
             //Run the command initializers
             CommandInit.GetCommandInitializers<Bot>().ToList()
@@ -107,7 +107,7 @@ namespace DiscordBot.Core
             this.StartMessageLoop();
 
             //Login
-            await client.LoginAsync(Discord.TokenType.Bot, this.config["BotToken"]);
+            await client.LoginAsync(Discord.TokenType.Bot, this.config.discord_bot_token);
             await client.StartAsync();
 
             //Wait until program exit
@@ -394,7 +394,7 @@ namespace DiscordBot.Core
         }
 
         private DiscordSocketClient        client;
-        private Dictionary<string, string> config;
+        private Config                     config;
         private List<CommandCategory>      commandCategories;
         private Queue<SocketUserMessage>   messageQueue;
         private ulong                      ownerID;
