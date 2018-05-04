@@ -15,20 +15,6 @@ namespace DiscordBot.Core
         public string spotify_client_secret { get; set; }
         public string youtube_api_key       { get; set; }
 
-        public void WriteConfig()
-        {
-            //Open the config file
-            using (FileStream fs = File.Open("config.json", FileMode.Create, FileAccess.Write))
-            {
-                //Get a UTF-8 encoded text stream
-                StreamWriter sw = new StreamWriter(fs, Encoding.UTF8);
-
-                //Deserialise the JSON and return the configuration
-                sw.Write(JsonConvert.SerializeObject(this, Formatting.Indented));
-                sw.Flush();
-            }
-        }
-
         public static Config? ReadConfig()
         {
             //Catch any errors
