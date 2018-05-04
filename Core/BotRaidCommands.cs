@@ -215,31 +215,31 @@ namespace DiscordBot.Core
             int timezone = ((sign == '+') ? 1 : -1) * utc;
 
             //Find out if the event is this year or next year
-            var now  = DateTimeOffset.UtcNow;
+            var now  = DateTimeOffset.UtcNow.ToOffset(new TimeSpan(timezone, 0, 0));
             int year = now.Year;
             if ((month < now.Month) || (month == now.Month && day < now.Day)) year++;
 
             //Calculate the timestamp
-            var date = new DateTimeOffset(year, month, day, hours, minutes, 0, new TimeSpan(timezone, 0, 0));
+            var offset = new DateTimeOffset(year, month, day, hours, minutes, 0, new TimeSpan(timezone, 0, 0));
 
-            //Create the raid
-            var handle = RaidManager.CreateRaid(msg.Author.Id, date, desc).Value;
-
-            //Return success
-            return "A raid has been created with ID " + handle.raid_id + " for the "  + day + Utility.GetOrdinal(day) +
-                    " of " + Utility.GetMonth(month) + " " + year + " at " +
-                    Utility.PadNum(hours) + ":" + Utility.PadNum(minutes)  +
-                    " " + Utility.RenderTimezone(timezone) + "\n\"" + desc + "\"";
+            //Pass on to implementation
+            return CmdRaidCreate_Implementation(msg, offset, desc);
         }
 
         private string CmdRaidCreateTodayOrTomorrow(SocketUserMessage msg, string day, int hours, int minutes, char sign, int utc, string desc)
         {
+            //Apply sign to timezone
+            int timezone = ((sign == '+') ? 1 : -1) * utc;
+
             //Look up the correct day
-            var eventDate = DateTimeOffset.UtcNow;
+            var eventDate = DateTimeOffset.UtcNow.ToOffset(new TimeSpan(timezone, 0, 0));
             if (day == "tomorrow") eventDate += new TimeSpan(1, 0, 0, 0);
 
-            //Pass on to the full implementation
-            return this.CmdRaidCreate(msg, eventDate.Day, eventDate.Month, hours, minutes, sign, utc, desc);
+            //Calculate the timestamp
+            var offset = new DateTimeOffset(eventDate.Year, eventDate.Month, eventDate.Day, hours, minutes, 0, new TimeSpan(timezone, 0, 0));
+
+            //Pass on to implementation
+            return CmdRaidCreate_Implementation(msg, offset, desc);
         }
 
         private string CmdRaidCreateHelp(SocketUserMessage _)
@@ -260,21 +260,8 @@ namespace DiscordBot.Core
             //Check if valid
             if (!handle.HasValue) return "No raid with that ID.";
 
-            //Get the owner
-            var ownerID = RaidManager.GetRaidData(handle.Value).Value.owner_id;
-
-            //Check if the user is the owner
-            if (msg.Author.Id == ownerID)
-            {
-                //Delete the raid
-                RaidManager.DeleteRaid(handle.Value);
-
-                return "Raid was deleted.";
-            }
-            else
-            {
-                return "Only the owner may delete that raid.";
-            }
+            //Pass on to implementation
+            return CmdRaidDelete_Implementation(msg, handle.Value);
         }
 
         private string CmdRaidDeleteHelp(SocketUserMessage _)
@@ -296,28 +283,11 @@ namespace DiscordBot.Core
             //Get the roles
             var roles = this.GetRoles(filter);
 
-            //Check that we got at least one
-            if (roles != null)
-            {
-                //Get the raiders that match the filter
-                var roster = RaidManager.CoalesceRaiders(handle.Value)
-                                        .Where (e => e.roles.Union(roles).Count() > 0)
-                                        .Select(e => $"{e.user_id} - {string.Join(", ", e.roles)}");
-
-                //Check if there are any
-                if (roster.Count() > 0)
-                {
-                    return $"These are the people that matched your query:\n{string.Join("\n", roster)}\nCount: {roster.Count()}";
-                }
-
-                return "No raiders matched your query";
-            }
-
-            //Use the normal roster function
-            return this.CmdRaidRoster(msg, raidID);
+            //Pass on to implementation
+            return CmdRaidRoster_Implementation(msg, handle.Value, roles);
         }
 
-        private string CmdRaidRoster(SocketUserMessage _, int raidID)
+        private string CmdRaidRoster(SocketUserMessage msg, int raidID)
         {
             //Get a handle to the raid
             var handle = RaidManager.GetRaidFromID(raidID);
@@ -325,17 +295,11 @@ namespace DiscordBot.Core
             //Check if valid
             if (!handle.HasValue) return "No raid with that ID.";
 
-            //Get the raiders
-            var roster = RaidManager.CoalesceRaiders(handle.Value)
-                                    .Select(e => $"{e.user_id} - {string.Join(", ", e.roles)}");
+            //Get all roles
+            var roles = this.raidConfig.GetAllRoles();
 
-            //Check if there are any
-            if (roster.Count() > 0)
-            {
-                return $"These are the people that signed up:\n{string.Join("\n", roster)}\nCount: {roster.Count()}";
-            }
-
-            return "The roster is empty.";
+            //Pass on to implementation
+            return CmdRaidRoster_Implementation(msg, handle.Value, roles);
         }
 
         private string CmdRaidRosterHelp(SocketUserMessage _)

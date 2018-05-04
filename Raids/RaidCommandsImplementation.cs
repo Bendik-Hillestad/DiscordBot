@@ -18,14 +18,22 @@ namespace DiscordBot.Core
 {
     public sealed partial class Bot
     {
-        /* Spooky unsafe C++ stuff */
-
         [DllImport("libherrington")]
         private static extern void solve(uint idx, IntPtr users, int length, IntPtr output);
 
-        /* End of spooky unsafe C++ stuff */
+        private List<string> GetRoles(string roleList)
+        {
+            //Create our regex
+            var regex = this.raidConfig
+                            .GetAllRoles      ()
+                            .OrderByDescending(s => s.Length)
+                            .Aggregate        ((s, s2) => s + "|" + s2);
 
-        /* Nice C# wrapper for spooky unsafe C++ stuff */
+            //Check for matches
+            return Regex.Matches (roleList, regex, RegexOptions.IgnoreCase)
+                        .Select  (r => r.Value.ToUpper())
+                        .Distinct().ToList();
+        }
 
         private Dictionary<string, float> GetRoleWeights(Entry e, int compIdx)
         {
@@ -138,19 +146,61 @@ namespace DiscordBot.Core
             return comp;
         }
 
-        private List<string> GetRoles(string roleList)
+        private string CmdRaidCreate_Implementation(SocketUserMessage msg, DateTimeOffset offset, string desc)
         {
-            //Create our regex
-            var regex = this.raidConfig
-                            .GetAllRoles      ()
-                            .OrderByDescending(s => s.Length)
-                            .Aggregate        ((s, s2) => s + "|" + s2);
+            //Create the raid
+            var handle = RaidManager.CreateRaid(msg.Author.Id, offset, desc).Value;
 
-            //Check for matches
-            return Regex.Matches (roleList, regex, RegexOptions.IgnoreCase)
-                        .Select  ((r) => r.Value.ToUpper())
-                        .Distinct()
-                        .ToList  ();
+            //Return success
+            return $"Raid has been created (ID: {handle.raid_id}).";
+        }
+
+        private string CmdRaidDelete_Implementation(SocketUserMessage msg, RaidHandle handle)
+        {
+            //Grab the data from the raid
+            var data = RaidManager.GetRaidData(handle);
+
+            //Check if valid
+            if (data.HasValue)
+            {
+                //Get the owner
+                var owner_id = data.Value.owner_id;
+
+                //Check if the user is the owner
+                if (msg.Author.Id == owner_id)
+                {
+                    //Delete the raid
+                    RaidManager.DeleteRaid(handle);
+
+                    //Return success
+                    return "Raid has been deleted.";
+                }
+
+                //Return permission error
+                return "You do not have the permission to delete that raid.";
+            }
+
+            //Return generic error
+            return "There was an error processing the raid.";
+        }
+
+        private string CmdRaidRoster_Implementation(SocketUserMessage msg, RaidHandle handle, List<string> filter)
+        {
+            //Get the raiders that match the filter
+            var roster = RaidManager.CoalesceRaiders(handle)
+                                    .Where (e => e.roles.Union(filter).Count() > 0)
+                                    .Select(e => $"{e.user_id} - {string.Join(", ", e.roles)}")
+                                    .ToList();
+
+            //Check if there are any
+            if (roster.Count > 0)
+            {
+                //Return the roster
+                return $"Result:\n{string.Join("\n", roster)}\nCount: {roster.Count}";
+            }
+
+            //None found
+            return "Result: None";
         }
     }
 }
