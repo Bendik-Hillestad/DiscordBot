@@ -209,111 +209,6 @@ namespace DiscordBot.Core
             this.raidConfig.GenerateSolverLibrary();
         }
 
-        /* Spooky unsafe C++ stuff */
-
-        [DllImport("libherrington")]
-        private static extern void solve(uint idx, IntPtr users, int length, IntPtr output);
-
-        /* End of spooky unsafe C++ stuff */
-
-        /* Nice C# wrapper for spooky unsafe C++ stuff */
-
-        private Dictionary<string, float> GetRoleWeights(Entry e, int compIdx)
-        {
-            //Filter the user's roles based on what this comp needs
-            var roles = e.roles.Union(this.raidConfig.GetRolesForComp(compIdx));
-
-            //Calculate the weights
-            var weights = new Dictionary<string, float>();
-            roles.Select((r, i) =>
-            {
-                if (i == 0) return new KeyValuePair<string, float>(r, 1.5f);
-                else        return new KeyValuePair<string, float>(r, 1.0f);
-            }).ToList().ForEach(w => weights.Add(w.Key, w.Value));
-
-            //Return the weights
-            return weights;
-        }
-
-        private Entry?[] MakeRaidComp(List<Entry> raiders, int compIdx)
-        {
-            //Get the roles
-            var roles     = this.raidConfig.GetAllRoles();
-
-            //Get the size of the composition
-            var compSize  = this.raidConfig.Compositions[compIdx].Layout.Count;
-
-            //Allocate an array to hold the data that we feed into the solver
-            var userSize  = this.raidConfig.GetUserSizeInBytes();
-            var input     = Marshal.AllocHGlobal(userSize * raiders.Count);
-
-            //Allocate an array to hold the output data
-            var blockSize = this.raidConfig.GetOutputBlockSizeInBytes();
-            var output    = Marshal.AllocHGlobal(blockSize * compSize);
-
-            //Iterate through the raiders
-            var offset = input; var idx = 0;
-            raiders.ForEach((r) =>
-            {
-                //Write the id into the array
-                Marshal.WriteInt64(offset, (long)r.user_id);
-                var next = offset + userSize;
-                offset  += sizeof(ulong);
-
-                //Get the role weights
-                var weights = this.GetRoleWeights(r, compIdx);
-
-                //Calculate a bias by squashing the join index into the [0, 1] range
-                float bias = 1.0f - (idx / (idx + 2.0f * compSize));
-
-                //Iterate through the roles
-                roles.ForEach((role) =>
-                {
-                    //Get the weight for this role
-                    float weight = weights.GetValueOrDefault(role);
-
-                    //Adjust the weight
-                    weight = weight * bias;
-
-                    //Write the weight into the array
-                    Marshal.WriteInt32(offset, BitConverter.SingleToInt32Bits(weight));
-                    offset += sizeof(float);
-                });
-
-                //Update offset and index
-                offset = next; idx++;
-            });
-
-            //Feed values to the solver
-            solve((uint)compIdx, input, raiders.Count, output);
-
-            //Prepare result
-            var result = new Entry?[compSize];
-
-            //Iterate over the output array
-            offset = output;
-            for (int i = 0; i < compSize; i++)
-            {
-                //Get the id
-                var id = (ulong)Marshal.ReadInt64(output + (i * blockSize));
-
-                //Check that it's not zero
-                if (id != 0)
-                {
-                    //Insert the right raider
-                    result[i] = raiders.Find(r => id == r.user_id);
-                }
-                else result[i] = null;
-            }
-
-            //Release our unmanaged memory
-            Marshal.FreeHGlobal(input);
-            Marshal.FreeHGlobal(output);
-
-            //Return the result
-            return result;
-        }
-
         private string CmdRaidCreate(SocketUserMessage msg, int day, int month, int hours, int minutes, char sign, int utc, string desc)
         {
             //Apply sign to timezone
@@ -469,21 +364,6 @@ namespace DiscordBot.Core
             return "There are no planned raids right now.";
         }
 
-        private List<string> GetRoles(string roleList)
-        {
-            //Create our regex
-            var regex = this.raidConfig
-                            .GetAllRoles      ()
-                            .OrderByDescending(s => s.Length)
-                            .Aggregate        ((s, s2) => s + "|" + s2);
-
-            //Check for matches
-            return Regex.Matches (roleList, regex, RegexOptions.IgnoreCase)
-                        .Select  ((r) => r.Value.ToUpper())
-                        .Distinct()
-                        .ToList  ();
-        }
-
         private string CmdRaidJoin(SocketUserMessage msg, int raidID, string roleList)
         {
             //Get the roles
@@ -520,21 +400,18 @@ namespace DiscordBot.Core
 
         private string CmdRaidJoinSimple(SocketUserMessage msg, string roleList)
         {
-            try
-            {
-                //Get the next raid
-                var handle = RaidManager.EnumerateRaids()
-                                        .OrderBy(r => r.timestamp)
-                                        .First  ();
+            //Get the next raid
+            var handle = RaidManager.GetNextRaid();
 
-                //Pass on to the full implementation
-                return this.CmdRaidJoin(msg, handle.raid_id, roleList);
-            }
-            catch
+            //Check if valid
+            if (handle.HasValue)
             {
-                //Return error
-                return "There are no raids being organised right now.";
+                //Pass on to the full implementation
+                return this.CmdRaidJoin(msg, handle.Value.raid_id, roleList);
             }
+
+            //Return error
+            return "There are no raids being organised right now.";
         }
 
         private string CmdRaidJoinHelp(SocketUserMessage _)
@@ -585,21 +462,18 @@ namespace DiscordBot.Core
 
         private string CmdRaidAddSimple(SocketUserMessage msg, string name, string roleList)
         {
-            try
-            {
-                //Get the next raid
-                var handle = RaidManager.EnumerateRaids()
-                                        .OrderBy(r => r.timestamp)
-                                        .First  ();
+            //Get the next raid
+            var handle = RaidManager.GetNextRaid();
 
-                //Pass on to the full implementation
-                return this.CmdRaidAdd(msg, handle.raid_id, name, roleList);
-            }
-            catch
+            //Check if valid
+            if (handle.HasValue)
             {
-                //Return error
-                return "There are no raids being organised right now.";
+                //Pass on to the full implementation
+                return this.CmdRaidAdd(msg, handle.Value.raid_id, name, roleList);
             }
+
+            //Return error
+            return "There are no raids being organised right now.";
         }
 
         private string CmdRaidAddHelp(SocketUserMessage _)
@@ -666,21 +540,6 @@ namespace DiscordBot.Core
                    "If you do not remember the ID, type \"$raid list\" to find it.\n" +
                    "You can then type \"$raid kick [ID] [name]\"\n" +
                    "For example: \"$raid kick 123 SomeGuy\"";
-        }
-
-        private Entry?[] GenerateComp(RaidHandle handle, int compIdx, out List<Entry> unused)
-        {
-            //Get the raiders
-            var raiders = RaidManager.CoalesceRaiders(handle);
-
-            //Send to solver
-            var comp = this.MakeRaidComp(raiders, compIdx);
-
-            //Get anyone that is not included
-            unused = raiders.Where(e => !comp.Contains(e)).ToList();
-
-            //Return the comp
-            return comp;
         }
 
         private string CmdRaidMakeComp(SocketUserMessage ctx, string name, int raidID)
@@ -751,40 +610,34 @@ namespace DiscordBot.Core
 
         private string CmdRaidMakeCompSimple(SocketUserMessage msg, string name)
         {
-            try
-            {
-                //Get the next raid
-                var handle = RaidManager.EnumerateRaids()
-                                        .OrderBy(r => r.timestamp)
-                                        .First  ();
+            //Get the next raid
+            var handle = RaidManager.GetNextRaid();
 
-                //Pass on to the full implementation
-                return this.CmdRaidMakeComp(msg, name, handle.raid_id);
-            }
-            catch
+            //Check if valid
+            if (handle.HasValue)
             {
-                //Return error
-                return "There are no raids being organised right now.";
+                //Pass on to the full implementation
+                return this.CmdRaidMakeComp(msg, name, handle.Value.raid_id);
             }
+
+            //Return error
+            return "There are no raids being organised right now.";
         }
 
         private string CmdRaidMakeCompSimplest(SocketUserMessage msg)
         {
-            try
-            {
-                //Get the next raid
-                var handle = RaidManager.EnumerateRaids()
-                                        .OrderBy(r => r.timestamp)
-                                        .First();
+            //Get the next raid
+            var handle = RaidManager.GetNextRaid();
 
-                //Pass on to the full implementation
-                return this.CmdRaidMakeComp(msg, "DEFAULT", handle.raid_id);
-            }
-            catch
+            //Check if valid
+            if (handle.HasValue)
             {
-                //Return error
-                return "There are no raids being organised right now.";
+                //Pass on to the full implementation
+                return this.CmdRaidMakeComp(msg, "DEFAULT", handle.Value.raid_id);
             }
+
+            //Return error
+            return "There are no raids being organised right now.";
         }
 
         private string CmdRaidMakeCompHelp(SocketUserMessage _)
