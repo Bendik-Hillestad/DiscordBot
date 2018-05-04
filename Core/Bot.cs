@@ -23,8 +23,9 @@ namespace DiscordBot.Core
             //Setup the client
             this.client = new DiscordSocketClient(new DiscordSocketConfig
             {
-                LogLevel          = Discord.LogSeverity.Verbose,
-                DefaultRetryMode  = Discord.RetryMode.AlwaysRetry
+                LogLevel            = Discord.LogSeverity.Verbose,
+                DefaultRetryMode    = Discord.RetryMode.AlwaysRetry,
+                AlwaysDownloadUsers = true
             });
 
             //Setup empty config
@@ -64,8 +65,12 @@ namespace DiscordBot.Core
                 //Get the user
                 var user = channel.GetUser(userID);
 
-                //Return the Nickname or Username
-                return !string.IsNullOrEmpty(user.Nickname) ? user.Nickname : user.Username;
+                //Check that it's not null
+                if (user != null)
+                {
+                    //Return the Nickname or Username
+                    return !string.IsNullOrEmpty(user.Nickname) ? user.Nickname : user.Username;
+                }
             }
 
             //Just return the userID as a string
