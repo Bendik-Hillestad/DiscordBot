@@ -142,6 +142,7 @@ namespace DiscordBot.Raids
                 {
                     //Serialise the Raid object
                     sw.Write(JsonConvert.SerializeObject(raid, Formatting.Indented));
+                    sw.Flush();
                 }
 
                 //Return the handle
