@@ -79,6 +79,21 @@ namespace DiscordBot.Raids
         }
 
         /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        public static RaidHandle? GetNextRaid()
+        {
+            //Catch any errors
+            return Debug.Try<RaidHandle?>(() =>
+            {
+                //Enumerate and return the handle with the earliest timestamp
+                return EnumerateRaids().OrderBy(r => r.timestamp)
+                                       .First  ();
+            }, null);
+        }
+
+        /// <summary>
         /// Gets a read-only view of the data for a given raid.
         /// </summary>
         /// <param name="handle">The handle to the raid.</param>
