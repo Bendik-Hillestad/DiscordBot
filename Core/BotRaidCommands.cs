@@ -376,8 +376,14 @@ namespace DiscordBot.Core
                    $"**You can omit the id to simply join the first raid.**";
         }
 
-        private string CmdRaidAdd(SocketUserMessage _, int raidID, string name, string roleList)
+        private string CmdRaidAdd(SocketUserMessage msg, int raidID, string name, string roleList)
         {
+            //Get a handle to the raid
+            var handle = RaidManager.GetRaidFromID(raidID);
+
+            //Check if valid
+            if (!handle.HasValue) return "No raid with that ID.";
+
             //Get the roles
             var roles = this.GetRoles(roleList);
             bool bu = false;
@@ -389,25 +395,8 @@ namespace DiscordBot.Core
                 bu = true;
             }
 
-            //Check that we got at least one
-            if ((roles?.Count ?? 0) > 0)
-            {
-                //Get a handle to the raid
-                var handle = RaidManager.GetRaidFromID(raidID);
-
-                //Check if valid
-                if (!handle.HasValue) return "No raid with that ID.";
-
-                //Add to the raid
-                RaidManager.AppendRaider(handle.Value, name, bu, roles);
-
-                return $"They were added to the raid{(bu ? " as backup" : "")} with these roles: \"{string.Join(", ", roles)}\".";
-            }
-            else
-            {
-                //Return error
-                return "No roles provided. Type \"$raid add\" if you need help with this command.";
-            }
+            //Pass on to implementation
+            return CmdRaidAdd_Implementation(msg, handle.Value, name, bu, roles);
         }
 
         private string CmdRaidAddSimple(SocketUserMessage msg, string name, string roleList)
@@ -416,14 +405,21 @@ namespace DiscordBot.Core
             var handle = RaidManager.GetNextRaid();
 
             //Check if valid
-            if (handle.HasValue)
+            if (!handle.HasValue) return "No raids to join.";
+
+            //Get the roles
+            var roles = this.GetRoles(roleList);
+            bool bu = false;
+
+            //Check if one of the roles is BACKUP
+            if (roleList.ToUpper().Contains("BACKUP"))
             {
-                //Pass on to the full implementation
-                return this.CmdRaidAdd(msg, handle.Value.raid_id, name, roleList);
+                //Set flag
+                bu = true;
             }
 
-            //Return error
-            return "There are no raids being organised right now.";
+            //Pass on to implementation
+            return CmdRaidAdd_Implementation(msg, handle.Value, name, bu, roles);
         }
 
         private string CmdRaidAddHelp(SocketUserMessage _)
@@ -442,11 +438,8 @@ namespace DiscordBot.Core
             //Check if valid
             if (!handle.HasValue) return "No raid with that ID.";
 
-            //Remove from the raid
-            RaidManager.RemoveRaider(handle.Value, msg.Author.Id);
-
-            //Return success
-            return "You were removed from the roster.\n";
+            //Pass on to implementation
+            return CmdRaidLeave_Implementation(msg, handle.Value);
         }
 
         private string CmdRaidLeaveHelp(SocketUserMessage _)
@@ -465,23 +458,8 @@ namespace DiscordBot.Core
             //Check if valid
             if (!handle.HasValue) return "No raid with that ID.";
 
-            //Get the owner
-            var ownerID = RaidManager.GetRaidData(handle.Value).Value.owner_id;
-
-            //Check if the user is the owner
-            if (msg.Author.Id == ownerID)
-            {
-                //Remove from the raid
-                RaidManager.RemoveRaider(handle.Value, name);
-
-                //Return success
-                return "They were removed from the roster.\n";
-            }
-            else
-            {
-                //Return failure
-                return "Only the owner of the raid can kick people.";
-            }
+            //Pass on to implementation
+            return CmdRaidKick_Implementation(msg, handle.Value, name);
         }
 
         private string CmdRaidKickHelp(SocketUserMessage _)
@@ -492,7 +470,7 @@ namespace DiscordBot.Core
                    "For example: \"$raid kick 123 SomeGuy\"";
         }
 
-        private string CmdRaidMakeComp(SocketUserMessage ctx, string name, int raidID)
+        private string CmdRaidMakeComp(SocketUserMessage msg, string name, int raidID)
         {
             //Get a handle to the raid
             var handle = RaidManager.GetRaidFromID(raidID);
@@ -503,59 +481,12 @@ namespace DiscordBot.Core
             //Find the comp
             int compIdx = this.raidConfig.GetCompIndex(name.ToUpper());
 
-            //Check that it exists
-            if (compIdx != -1)
-            {
-                //Generate composition
-                var bestComp = this.GenerateComp(handle.Value, compIdx, out var unused);
+            //Check if valid
+            if (compIdx == -1) return "No comp with that name. These are the recognised comps: \n" +
+                                       string.Join(", ", this.raidConfig.GetCompNames());
 
-                //Check that it's not null
-                if (bestComp != null)
-                {
-                    //Generate the textual representation of the comp
-                    var offset = 0;
-                    var text   = this.raidConfig
-                                     .GetRoleCounts(name.ToUpper())
-                                     .Where ((val) => val.Value > 0)
-                                     .Select((val) =>
-                                     {
-                                         //Prepare the string for this role
-                                         var output = $"{val.Key}:\n    ";
-
-                                         //Iterate over the area we care about for this role
-                                         var tmp = new List<string>();
-                                         for (int i = 0; i < val.Value; i++)
-                                         {
-                                             //Check that this slot is not empty
-                                             if (bestComp[offset + i].HasValue)
-                                             {
-                                                 //Add raider
-                                                 tmp.Add(this.GetUserName(ctx, bestComp[offset + i].Value.user_id.Value));
-                                             }
-                                             else tmp.Add("<empty>");
-                                         }
-
-                                         //Update offset
-                                         offset += val.Value;
-
-                                         //Push the names into the string
-                                         return output + string.Join(", ", tmp);
-                                     })
-                                     .Aggregate((s1, s2) => s1 + "\n" + s2);
-
-                    //Return the comp
-                    return "This is the best comp I could make:\n" + text +
-                          (unused.Count > 0 ? "\n\nNot included:\n" + string.Join('\n', unused.Select(e => this.GetUserName(ctx, e.user_id.Value))) : string.Empty);
-                }
-
-                //Return failure
-                return "Cannot create a comp for raid with that ID (" + raidID + ").\n" +
-                       "There either are no raiders for it or there was an error.";
-            }
-
-            //Return failure
-            return "No comp with that name exists. These are the recognised comps: \n" +
-                   string.Join(", ", this.raidConfig.GetCompNames());
+            //Pass on to implementation
+            return CmdRaidMakeComp_Implementation(msg, handle.Value, compIdx);
         }
 
         private string CmdRaidMakeCompSimple(SocketUserMessage msg, string name)
@@ -564,14 +495,17 @@ namespace DiscordBot.Core
             var handle = RaidManager.GetNextRaid();
 
             //Check if valid
-            if (handle.HasValue)
-            {
-                //Pass on to the full implementation
-                return this.CmdRaidMakeComp(msg, name, handle.Value.raid_id);
-            }
+            if (!handle.HasValue) return "No raids being organized.";
 
-            //Return error
-            return "There are no raids being organised right now.";
+            //Find the comp
+            int compIdx = this.raidConfig.GetCompIndex(name.ToUpper());
+
+            //Check if valid
+            if (compIdx == -1) return "No comp with that name. These are the recognised comps: \n" +
+                                       string.Join(", ", this.raidConfig.GetCompNames());
+
+            //Pass on to implementation
+            return CmdRaidMakeComp_Implementation(msg, handle.Value, compIdx);
         }
 
         private string CmdRaidMakeCompSimplest(SocketUserMessage msg)
@@ -580,14 +514,10 @@ namespace DiscordBot.Core
             var handle = RaidManager.GetNextRaid();
 
             //Check if valid
-            if (handle.HasValue)
-            {
-                //Pass on to the full implementation
-                return this.CmdRaidMakeComp(msg, "DEFAULT", handle.Value.raid_id);
-            }
+            if (!handle.HasValue) return "No raids being organized.";
 
-            //Return error
-            return "There are no raids being organised right now.";
+            //Pass on to implementation
+            return CmdRaidMakeComp_Implementation(msg, handle.Value, 0);
         }
 
         private string CmdRaidMakeCompHelp(SocketUserMessage _)
@@ -606,29 +536,8 @@ namespace DiscordBot.Core
                              .Select (r => r.Value.ToUpper())
                              .ToList ();
 
-            //Check that at least one was provided
-            if (roles.Count > 0)
-            {
-                //Add the comp description
-                this.raidConfig.AddCompDescription(new CompDescription
-                {
-                    Name   = name.ToUpper(),
-                    Layout = roles
-                });
-
-                //Save and compile
-                bool success = Debug.Try(() =>
-                {
-                    this.raidConfig.SaveConfig();
-                    this.raidConfig.GenerateSolverLibrary();
-                });
-
-                //Return result
-                return success ? "Comp was created." : "There was an error #blamearnoud";
-            }
-
-            //Return error
-            return "You need to provide the roles in the composition!";
+            //Pass on to implementation
+            return CmdRaidCreateComp_Implementation(msg, name, roles);
         }
 
         private string CmdRaidCreateCompHelp(SocketUserMessage _)

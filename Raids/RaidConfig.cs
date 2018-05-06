@@ -58,7 +58,7 @@ namespace DiscordBot.Raids
         public void AddCompDescription(CompDescription description)
         {
             //Make sure one with this name does not already exist
-            this.Compositions.RemoveAll((other) => string.Equals(description.Name, other.Name));
+            this.Compositions.RemoveAll(other => string.Equals(description.Name, other.Name));
 
             //Add composition description
             this.Compositions.Add(description);
@@ -233,19 +233,19 @@ namespace DiscordBot.Raids
             }), 10);
         }
 
-        public List<KeyValuePair<string, int>> GetRoleCounts(string compName)
+        public List<KeyValuePair<string, int>> GetRoleCounts(int compIdx)
         {
             //Find the comp
-            var comp = this.Compositions.Find((c) => string.Equals(compName, c.Name)).Layout;
+            var comp = this.Compositions.ElementAt(compIdx).Layout;
 
             //Count the occurrences of the roles in this comp
             return this.GetAllRoles()
-                       .Select((r) =>
+                       .Select(r =>
                        {
                            return new KeyValuePair<string, int>
                            (
                                r,
-                               comp.Count((s) => string.Equals(r, s))
+                               comp.Count(s => string.Equals(r, s))
                            );
                        })
                        .ToList();
@@ -262,7 +262,7 @@ namespace DiscordBot.Raids
         public List<string> GetRolesForComp(int compIdx)
         {
             return this.Compositions
-                       .Select   ((desc) => desc.Layout.Distinct())
+                       .Select   (desc => desc.Layout.Distinct())
                        .ElementAt(compIdx)
                        .ToList   ();
         }
@@ -270,14 +270,14 @@ namespace DiscordBot.Raids
         public List<string> GetCompNames()
         {
             return this.Compositions
-                       .Select((desc) => desc.Name)
+                       .Select(desc => desc.Name)
                        .ToList();
         }
 
         public int GetCompIndex(string name)
         {
             return this.Compositions
-                       .FindIndex((c) => string.Equals(c.Name, name));
+                       .FindIndex(c => string.Equals(c.Name, name));
         }
 
         //TODO: These should probably be queried from the library

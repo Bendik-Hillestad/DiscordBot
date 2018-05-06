@@ -237,5 +237,129 @@ namespace DiscordBot.Core
             //Return missing roles error
             return "No recognized roles provided.";
         }
+
+        private string CmdRaidAdd_Implementation(SocketUserMessage msg, RaidHandle handle, string name, bool backup, List<string> roles)
+        {
+            //Check that we got any roles
+            if (roles.Count > 0)
+            {
+                //Add to the raid
+                RaidManager.AppendRaider(handle, name, backup, roles);
+
+                //Return success
+                return $"They were added to the raid{(backup ? " as backup" : "")} with these roles: \"{string.Join(", ", roles)}\".";
+            }
+
+            //Return missing roles error
+            return "No recognized roles provided.";
+        }
+
+        private string CmdRaidLeave_Implementation(SocketUserMessage msg, RaidHandle handle)
+        {
+            //Remove from the raid
+            RaidManager.RemoveRaider(handle, msg.Author.Id);
+
+            //Return success
+            return "You were removed from the roster.\n";
+        }
+
+        private string CmdRaidKick_Implementation(SocketUserMessage msg, RaidHandle handle, string name)
+        {
+            //Grab the data from the raid
+            var data = RaidManager.GetRaidData(handle);
+
+            //Check if valid
+            if (data.HasValue)
+            {
+                //Get the owner
+                var owner_id = data.Value.owner_id;
+
+                //Check if the user is the owner
+                if (msg.Author.Id == owner_id)
+                {
+                    //Remove from the raid
+                    RaidManager.RemoveRaider(handle, name);
+
+                    //Return success
+                    return "They were removed from the roster.\n";
+                }
+                else
+                {
+                    //Return failure
+                    return "Only the owner of the raid can kick people.";
+                }
+            }
+
+            //Return generic error
+            return "There was an error processing the raid.";
+        }
+
+        private string CmdRaidMakeComp_Implementation(SocketUserMessage msg, RaidHandle handle, int compIndex)
+        {
+            //Generate composition
+            var bestComp = this.GenerateComp(handle, compIndex, out var unused);
+
+            //Generate the textual representation of the comp
+            var offset = 0;
+            var text   = this.raidConfig
+                             .GetRoleCounts(compIndex)
+                             .Where (val => val.Value > 0)
+                             .Select(val =>
+                             {
+                                 //Prepare the string for this role
+                                 var output = $"{val.Key}:\n    ";
+
+                                 //Iterate over the area we care about for this role
+                                 var tmp = new List<string>();
+                                 for (int i = 0; i < val.Value; i++)
+                                 {
+                                     //Check that this slot is not empty
+                                     if (bestComp[offset + i].HasValue)
+                                     {
+                                         //Add raider
+                                         tmp.Add(this.GetUserName(msg, bestComp[offset + i].Value.user_id.Value));
+                                     }
+                                     else tmp.Add("<empty>");
+                                 }
+
+                                 //Update offset
+                                 offset += val.Value;
+
+                                 //Push the names into the string
+                                 return output + string.Join(", ", tmp);
+                             })
+                             .Aggregate((s1, s2) => s1 + "\n" + s2);
+
+            //Return the comp
+            return "This is the best comp I could make:\n" + text +
+                    (unused.Count > 0 ? "\n\nNot included:\n" + string.Join('\n', unused.Select(e => this.GetUserName(msg, e.user_id.Value))) : string.Empty);
+        }
+
+        private string CmdRaidCreateComp_Implementation(SocketUserMessage msg, string name, List<string> comp)
+        {
+            //Check that we got a comp
+            if (comp.Count > 0)
+            {
+                //Add the comp description
+                this.raidConfig.AddCompDescription(new CompDescription
+                {
+                    Name   = name.ToUpper(),
+                    Layout = comp
+                });
+
+                //Save and compile
+                bool success = Debug.Try(() =>
+                {
+                    this.raidConfig.SaveConfig();
+                    this.raidConfig.GenerateSolverLibrary();
+                });
+
+                //Return result
+                return success ? "Comp was created." : "There was an error #blamearnoud";
+            }
+
+            //Return missing roles error
+            return "No roles provided!";
+        }
     }
 }
