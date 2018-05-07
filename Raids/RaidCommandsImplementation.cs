@@ -189,14 +189,27 @@ namespace DiscordBot.Core
             //Get the raiders that match the filter
             var roster = RaidManager.CoalesceRaiders(handle)
                                     .Where (e => e.roles.Union(filter).Count() > 0)
-                                    .Select(e => $"{e.user_id} - {string.Join(", ", e.roles)}")
                                     .ToList();
 
-            //Check if there are any
+            //Check that it's not empty
             if (roster.Count > 0)
             {
-                //Return the roster
-                return $"Result:\n{string.Join("\n", roster)}\nCount: {roster.Count}";
+                //Resolve their names and roles
+                var tmp = roster.Select(e =>
+                {
+                    //Get the name
+                    var name = (e.user_id.HasValue) ? this.GetUserName(msg, e.user_id.Value)
+                                                    : e.user_name;
+
+                    //Get the roles
+                    var roles = string.Join(", ", e.roles);
+
+                    //Concatenate
+                    return $"{name} - {roles}";
+                }).ToList();
+
+                //Join and return the result
+                return $"Result:\n{string.Join("\n", tmp)}\nCount: {tmp.Count}";
             }
 
             //None found
