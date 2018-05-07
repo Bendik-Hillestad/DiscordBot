@@ -299,40 +299,66 @@ namespace DiscordBot.Core
             //Generate composition
             var bestComp = this.GenerateComp(handle, compIndex, out var unused);
 
-            //Generate the textual representation of the comp
+            //Prepare the categories
+            var categories = this.raidConfig.GetRoleCounts(compIndex)
+                                            .Where(val => val.Value > 0);
+
+            //Iterate over the categories
+            var output = "";
             var offset = 0;
-            var text   = this.raidConfig
-                             .GetRoleCounts(compIndex)
-                             .Where (val => val.Value > 0)
-                             .Select(val =>
-                             {
-                                 //Prepare the string for this role
-                                 var output = $"{val.Key}:\n    ";
+            foreach (var category in categories)
+            {
+                //Push the name
+                output += $"\n{category.Key}:\n    ";
 
-                                 //Iterate over the area we care about for this role
-                                 var tmp = new List<string>();
-                                 for (int i = 0; i < val.Value; i++)
-                                 {
-                                     //Check that this slot is not empty
-                                     if (bestComp[offset + i].HasValue)
-                                     {
-                                         //Add raider
-                                         tmp.Add(this.GetUserName(msg, bestComp[offset + i].Value.user_id.Value));
-                                     }
-                                     else tmp.Add("<empty>");
-                                 }
+                //Generate a list of the members in this category
+                var members = new List<string>();
+                for (int i = 0; i < category.Value; i++)
+                {
+                    //Check that the slot was filled
+                    if (bestComp[offset + i].HasValue)
+                    {
+                        //Grab the entry
+                        var entry = bestComp[offset + i].Value;
 
-                                 //Update offset
-                                 offset += val.Value;
+                        //Get their name
+                        var name = (entry.user_id.HasValue) ? this.GetUserName(msg, entry.user_id.Value)
+                                                            : entry.user_name;
 
-                                 //Push the names into the string
-                                 return output + string.Join(", ", tmp);
-                             })
-                             .Aggregate((s1, s2) => s1 + "\n" + s2);
+                        //Push into list
+                        members.Add(name);
+                    }
+
+                    //Just add an empty slot
+                    members.Add("<empty>");
+                }
+
+                //Update offset
+                offset += category.Value;
+
+                //Join the list and add to our output
+                output += string.Join(", ", members);
+            }
+
+            //Check if we need to add an "not included" category
+            if (unused.Count > 0)
+            {
+                //Push the name
+                output += "Not included:\n    ";
+
+                //Get the names of the entries
+                var names = unused.Select(e =>
+                {
+                    return (e.user_id.HasValue) ? this.GetUserName(msg, e.user_id.Value)
+                                                : e.user_name;
+                });
+
+                //Join the names and add to our output
+                output += string.Join(", ", names);
+            }
 
             //Return the comp
-            return "This is the best comp I could make:\n" + text +
-                    (unused.Count > 0 ? "\n\nNot included:\n" + string.Join('\n', unused.Select(e => this.GetUserName(msg, e.user_id.Value))) : string.Empty);
+            return "This is the best comp I could make:" + output;
         }
 
         private string CmdRaidCreateComp_Implementation(SocketUserMessage msg, string name, List<string> comp)
