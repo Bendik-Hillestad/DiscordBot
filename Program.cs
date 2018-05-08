@@ -12,9 +12,7 @@ namespace DiscordBot
 {
     public sealed class Program
     {
-        public static void Main(string[] args) => (new Program()).Start().GetAwaiter().GetResult();
-
-        public async Task Start()
+        public static async Task Main(string[] args)
         {
             //Set output encoding
             Console.OutputEncoding = Encoding.Unicode;
