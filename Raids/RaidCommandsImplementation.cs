@@ -52,7 +52,7 @@ namespace DiscordBot.Core
             return weights;
         }
 
-        private Entry?[] MakeRaidComp(List<Entry> raiders, int compIdx)
+        private Entry?[] MakeRaidComp(in List<Entry> raiders, int compIdx)
         {
             //Get the roles
             var roles     = this.raidConfig.GetAllRoles();
@@ -73,7 +73,7 @@ namespace DiscordBot.Core
             raiders.ForEach((r) =>
             {
                 //Write the id into the array
-                Marshal.WriteInt64(offset, (long)r.user_id);
+                Marshal.WriteInt64(offset, (Int64)r.user_id.Value);
                 var next = offset + userSize;
                 offset  += sizeof(ulong);
 
@@ -84,7 +84,7 @@ namespace DiscordBot.Core
                 float bias = 1.0f - (idx / (idx + 2.0f * compSize));
 
                 //Iterate through the roles
-                roles.ForEach((role) =>
+                roles.ForEach(role =>
                 {
                     //Get the weight for this role
                     float weight = weights.GetValueOrDefault(role);
