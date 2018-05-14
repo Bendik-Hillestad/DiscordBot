@@ -4,11 +4,15 @@ using System.Text;
 
 using DiscordBot.Commands;
 
-namespace DiscordBot.Modules
+namespace DiscordBot.Modules.Music
 {
     public class MusicModule : CommandModule<MusicModule>
     {
         public override string ModuleName => nameof(MusicModule);
+
+        public override void OnInit()
+        {
+        }
 
         [Command("music join")]
         public void music_join(Context ctx)

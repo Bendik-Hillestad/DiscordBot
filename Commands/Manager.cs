@@ -60,8 +60,17 @@ namespace DiscordBot.Commands
             //Insert the context into the match
             match.extractedParams[0] = ctx;
 
-            //Invoke the command
-            match.cmd.Invoke(match.module, match.extractedParams);
+            //Catch any failed preconditions
+            try
+            {
+                //Invoke the command
+                match.cmd.Invoke(match.module, match.extractedParams);
+            }
+            catch (PreconditionException ex)
+            {
+                //Send error
+                Bot.GetBotInstance().SendErrorMessage(ctx.message.Channel, "Error:", ex.Message);
+            }
         }
 
         private static void ProcessPartialMatch(Context ctx, string message, IEnumerable<CommandMatch> matches)

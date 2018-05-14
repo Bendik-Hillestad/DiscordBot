@@ -12,6 +12,8 @@ namespace DiscordBot.Commands
         public abstract string           ModuleName { get; }
         public abstract List<MethodInfo> Commands   { get; }
 
+        public abstract void   OnInit();
+
         public abstract string HelpMessage(Context ctx);
     }
 
