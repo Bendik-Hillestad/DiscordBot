@@ -67,6 +67,18 @@ namespace DiscordBot.Core
             channel.SendMessageAsync("", false, embed).GetAwaiter().GetResult();
         }
 
+        public void SendSuccessMessage(ISocketMessageChannel channel, string title, string description)
+        {
+            //Create the message
+            var embed = new EmbedBuilder()
+                          .WithColor(Color.Blue)
+                          .AddField(title, description)
+                          .Build();
+
+            //Send the message
+            channel.SendMessageAsync("", false, embed).GetAwaiter().GetResult();
+        }
+
         public string GetUserName(SocketUserMessage context, ulong userID)
         {
             //Check if this was sent in a guild channel
@@ -337,10 +349,8 @@ namespace DiscordBot.Core
             //Start thread to process messages
             Task.Factory.StartNew(() =>
             {
-                begin:
-
                 //Catch any errors
-                Debug.Try(() =>
+                begin: Debug.Try(() =>
                 {
                     //Loop forever
                     while (true)
@@ -366,9 +376,8 @@ namespace DiscordBot.Core
                         if (msg.Author.Id != config.discord_owner_id) continue;
                         if (!msg.Content.StartsWith("#")) continue;
 
-                        var ctx = new Commands.Context { message = msg };
-                        Commands.Manager.ProcessCommand(ctx, 1);
-
+                        //Process the command
+                        Commands.Manager.ProcessCommand(new Commands.Context { message = msg }, 1);
                         //TODO: Run as a separate task, add timeout and shit
                         //Process message further
                         //this.ProcessMessage(msg);
