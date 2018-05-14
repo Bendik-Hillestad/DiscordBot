@@ -1,53 +1,34 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Linq;
-
-using DiscordBot.Utils;
 using System.Text.RegularExpressions;
 using System.Globalization;
 
 namespace DiscordBot.Commands
 {
+    public struct CommandMatch
+    {
+        public CommandModuleBase module;
+        public MethodInfo        cmd;
+        public int               inputMatch;
+        public int               signatureMatch;
+        public int               signatureLength;
+        public object[]          extractedParams;
+        public int               count;
+    }
+
     public static class CommandProcessor
     {
-        public struct CommandMatch
-        {
-            public MethodInfo cmd;
-            public int        inputMatch;
-            public int        signatureMatch;
-            public object[]   extractedParams;
-            public int        count;
-        }
-
-        public static bool Initialise()
-        {
-            //Check if we've already initialised
-            if (commands != null) return true;
-
-            //Catch any errors
-            return Debug.Try(() =>
-            {
-                //Get all the modules
-                var modules = ModuleSearcher.GetAllModules(Assembly.GetExecutingAssembly());
-
-                //Grab all the commands
-                commands = modules.Select   (t => CommandSearcher.GetAllCommands(t))
-                                  .Aggregate((e1, e2) => e1.Union(e2))
-                                  .ToList   ();
-            });
-        }
-
-        public static List<CommandMatch> ProcessCommand(string inputString)
+        public static List<CommandMatch> ProcessCommand(CommandModuleBase module, string inputString)
         {
             //Prepare a list to hold our candidates
             var candidates = new List<CommandMatch>();
 
-            //Go through each command
-            commands.ForEach(cmd =>
+            //Go through each command in the module
+            module.Commands.ForEach(cmd =>
             {
                 //Grab the signature to match
-                var signature = cmd.GetCustomAttribute<CommandAttribute>().Signature;
+                var signature = CommandManager.GetCommandSignature(cmd);
 
                 //Prepare our iterators
                 var inputIterator     = new StringIterator(inputString);
@@ -57,9 +38,11 @@ namespace DiscordBot.Commands
                 var paramInfo = cmd.GetParameters();
                 var candidate = new CommandMatch
                 {
+                    module          = module,
                     cmd             = cmd,
                     inputMatch      = 0,
                     signatureMatch  = 0,
+                    signatureLength = signature.Length,
                     extractedParams = new object[paramInfo.Length],
                     count           = 1
                 };
@@ -129,7 +112,7 @@ namespace DiscordBot.Commands
                 }
 
                 //Update how much we matched of the input and signature
-                candidate.inputMatch = inputIterator.Index;
+                candidate.inputMatch     = inputIterator.Index;
                 candidate.signatureMatch = signatureIterator.Index;
 
                 //Push candidate into list
@@ -140,7 +123,7 @@ namespace DiscordBot.Commands
             return candidates;
         }
 
-        public static bool CheckMatch(ParameterInfo param, StringIterator inputIterator, StringIterator signatureIterator, out object result)
+        private static bool CheckMatch(ParameterInfo param, StringIterator inputIterator, StringIterator signatureIterator, out object result)
         {
             //Get the type of the parameter
             Type paramType = param.ParameterType;
@@ -225,7 +208,7 @@ namespace DiscordBot.Commands
             var regex = new Regex(@"^[+-]?\d+");
 
             //Send it to our iterator
-            string number = inputIterator.ReadRegex(regex);
+            var number = inputIterator.ReadRegex(regex);
 
             //Setup the style and culture for parsing the float
             var style  = NumberStyles.AllowLeadingSign;
@@ -254,7 +237,7 @@ namespace DiscordBot.Commands
             var regex = new Regex(@"^[+-]?\d+(\.\d+)?");
 
             //Send it to our iterator
-            string number = inputIterator.ReadRegex(regex);
+            var number = inputIterator.ReadRegex(regex);
 
             //Setup the style and culture for parsing the float
             var style  = NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint;
@@ -284,7 +267,5 @@ namespace DiscordBot.Commands
             //Check that it's not null or empty
             return !string.IsNullOrWhiteSpace(tmp);
         }
-
-        private static List<MethodInfo> commands = null;
     }
 }

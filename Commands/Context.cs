@@ -1,11 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Discord.WebSocket;
+using Discord.Rest;
 
 namespace DiscordBot.Commands
 {
-    public sealed class Context
+    public struct Context
     {
-        
+        public SocketUserMessage message;
     }
 }

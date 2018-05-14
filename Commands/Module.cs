@@ -7,20 +7,60 @@ using DiscordBot.Utils;
 
 namespace DiscordBot.Commands
 {
-    [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
-    public sealed class ModuleAttribute : Attribute
-    {}
-
-    public static class ModuleSearcher
+    public abstract class CommandModuleBase
     {
-        public static IEnumerable<Type> GetAllModules(Assembly assembly)
+        public abstract string           ModuleName { get; }
+        public abstract List<MethodInfo> Commands   { get; }
+
+        public abstract string HelpMessage(Context ctx);
+    }
+
+    public abstract class CommandModule<T> : CommandModuleBase
+        where T : CommandModule<T>, new()
+    {
+        public static T Instance { get; } = new T();
+
+        public override List<MethodInfo> Commands { get; }
+
+        public CommandModule()
+        {
+            this.Commands = CommandManager.GetAllCommands(this);
+        }
+    }
+
+    public static class ModuleManager
+    {
+        public static CommandModuleBase GetModuleInstance(Type t)
+        {
+            //Invoke the getter for the CommandModule's Instance property
+            return t.BaseType.GetProperty("Instance")
+                    .GetMethod.Invoke(null, null) as CommandModuleBase;
+        }
+
+        public static List<CommandModuleBase> GetAllModules(Assembly assembly)
         {
             //Catch any errors
             return Debug.Try(() =>
             {
                 //Get all modules
-                return assembly.GetTypes().Where(t => t.GetCustomAttribute<ModuleAttribute>() != null);
-            }, new List<Type>());
+                return assembly.GetTypes().Where(t =>
+                {
+                    //Get the base type
+                    var baseType = t.BaseType;
+
+                    //Check that it has a basetype
+                    if (baseType != null)
+                    {
+                        //Check if it's the right base type
+                        return baseType.IsGenericType && (baseType.GetGenericTypeDefinition() == typeof(CommandModule<>));
+                    }
+
+                    //No match
+                    return false;
+                })
+                //Instantiate the modules
+                .Select(t => GetModuleInstance(t)).ToList();
+            }, new List<CommandModuleBase>());
         }
     }
 }

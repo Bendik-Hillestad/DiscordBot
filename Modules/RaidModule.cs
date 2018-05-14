@@ -6,115 +6,121 @@ using DiscordBot.Commands;
 
 namespace DiscordBot.Modules
 {
-    [Module]
-    public static class RaidModule
+    public class RaidModule : CommandModule<RaidModule>
     {
-        [Command("raid create {}/{}")]
-        public static void raid_create(Context ctx, uint day, uint month)
+        public override string ModuleName => nameof(RaidModule);
+
+        [Command("raid create {}/{} {}:{} UTC{} {}")]
+        public void raid_create(Context ctx, uint day, uint month, uint hours, uint minutes, int offset, [RegexParameter(@"[\S\s]+")] string description)
         {
 
         }
 
-        [Command("raid create {}")]
-        public static void raid_create(Context ctx, [RegexParameter(@"today|tomorrow")] string day)
+        [Command("raid create {} {}:{} UTC{} {}")]
+        public void raid_create(Context ctx, [RegexParameter(@"today|tomorrow")] string day, uint hours, uint minutes, int offset, [RegexParameter(@"[\S\s]+")] string description)
         {
 
         }
 
         [Command("raid delete {}")]
-        public static void raid_delete(Context ctx, uint id)
+        public void raid_delete(Context ctx, uint id)
         {
 
         }
 
         [Command("raid roster {} {}")]
-        public static void raid_roster(Context ctx, uint id, [RegexParameter(@"[\S\s]+")] string roles)
+        public void raid_roster(Context ctx, uint id, [RegexParameter(@"[\S\s]+")] string roles)
         {
 
         }
 
         [Command("raid roster {}")]
-        public static void raid_roster(Context ctx, uint id)
+        public void raid_roster(Context ctx, uint id)
         {
 
         }
 
         [Command("raid list")]
-        public static void raid_list(Context ctx)
+        public void raid_list(Context ctx)
         {
 
         }
 
         [Command("raid join {} {}")]
-        public static void raid_join(Context ctx, uint id, [RegexParameter(@"[\S\s]+")] string roles)
+        public void raid_join(Context ctx, uint id, [RegexParameter(@"[\S\s]+")] string roles)
         {
 
         }
 
         [Command("raid join {}")]
-        public static void raid_join(Context ctx, [RegexParameter(@"[\S\s]+")] string roles)
+        public void raid_join(Context ctx, [RegexParameter(@"[\S\s]+")] string roles)
         {
 
         }
 
         [Command("raid leave {}")]
-        public static void raid_leave(Context ctx, uint id)
+        public void raid_leave(Context ctx, uint id)
         {
 
         }
 
         [Command("raid leave")]
-        public static void raid_leave(Context ctx)
+        public void raid_leave(Context ctx)
         {
 
         }
 
-        [Command("raid add {} {}|{}")]
-        public static void raid_add(Context ctx, uint id, [RegexParameter(@"[\S\s]+")] string name, [RegexParameter(@"[\S\s]+")] string roles)
+        [Command("raid add {} {}:{}")]
+        public void raid_add(Context ctx, uint id, [RegexParameter(@"[\S\s]+")] string name, [RegexParameter(@"[\S\s]+")] string roles)
         {
 
         }
 
         [Command("raid add {}|{}")]
-        public static void raid_add(Context ctx, [RegexParameter(@"[\S\s]+")] string name, [RegexParameter(@"[\S\s]+")] string roles)
+        public void raid_add(Context ctx, [RegexParameter(@"[\S\s]+")] string name, [RegexParameter(@"[\S\s]+")] string roles)
         {
 
         }
 
         [Command("raid kick {} {}")]
-        public static void raid_kick(Context ctx, uint id, [RegexParameter(@"[\S\s]+")] string name)
+        public void raid_kick(Context ctx, uint id, [RegexParameter(@"[\S\s]+")] string name)
         {
 
         }
 
         [Command("raid make comp {} {}")]
-        public static void raid_make_comp(Context ctx, [RegexParameter(@"[\S\s]+")] string name, uint id)
+        public void raid_make_comp(Context ctx, [RegexParameter(@"[\S\s]+")] string name, uint id)
         {
 
         }
 
         [Command("raid make comp {}")]
-        public static void raid_make_comp(Context ctx, [RegexParameter(@"[\S\s]+")] string name)
+        public void raid_make_comp(Context ctx, [RegexParameter(@"[\S\s]+")] string name)
         {
 
         }
 
         [Command("raid make comp")]
-        public static void raid_make_comp(Context ctx)
+        public void raid_make_comp(Context ctx)
         {
 
         }
 
         [Command("raid create comp {} {}")]
-        public static void raid_create_comp(Context ctx, [RegexParameter(@"[\S\s]+")] string name, [RegexParameter(@"[\S\s]+")] string roles)
+        public void raid_create_comp(Context ctx, [RegexParameter(@"[\S\s]+")] string name, [RegexParameter(@"[\S\s]+")] string roles)
         {
 
         }
 
         [Command("raid help")]
-        public static void raid_help(Context ctx)
+        public void raid_help(Context ctx)
         {
 
+        }
+
+        public override string HelpMessage(Context ctx)
+        {
+            throw new NotImplementedException();
         }
     }
 }

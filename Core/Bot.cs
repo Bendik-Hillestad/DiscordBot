@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
 
+using Discord;
 using Discord.WebSocket;
 
 using DiscordBot.Utils;
@@ -52,6 +53,18 @@ namespace DiscordBot.Core
 
             //Return the instance
             return instance;
+        }
+
+        public void SendErrorMessage(ISocketMessageChannel channel, string title, string description)
+        {
+            //Create the message
+            var embed = new EmbedBuilder()
+                          .WithColor (Color.Red)
+                          .AddField  (title, description)
+                          .Build     ();
+
+            //Send the message
+            channel.SendMessageAsync("", false, embed).GetAwaiter().GetResult();
         }
 
         public string GetUserName(SocketUserMessage context, ulong userID)
@@ -349,9 +362,16 @@ namespace DiscordBot.Core
                         //Skip our own messages
                         if (msg.Author.Id == client.CurrentUser.Id) continue;
 
+                        //Only listen to owner atm
+                        if (msg.Author.Id != config.discord_owner_id) continue;
+                        if (!msg.Content.StartsWith("#")) continue;
+
+                        var ctx = new Commands.Context { message = msg };
+                        Commands.Manager.ProcessCommand(ctx, 1);
+
                         //TODO: Run as a separate task, add timeout and shit
                         //Process message further
-                        this.ProcessMessage(msg);
+                        //this.ProcessMessage(msg);
                     }
                 });
 
