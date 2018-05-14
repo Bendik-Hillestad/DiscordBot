@@ -79,9 +79,9 @@ namespace DiscordBot.Raids
         }
 
         /// <summary>
-        /// 
+        /// Gets a handle to the next raid, based on the
+        /// earliest timestamp.
         /// </summary>
-        /// <returns></returns>
         public static RaidHandle? GetNextRaid()
         {
             //Catch any errors
