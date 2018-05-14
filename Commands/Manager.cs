@@ -27,32 +27,32 @@ namespace DiscordBot.Commands
             var bestModule = results.OrderByDescending(matches => matches.Max(m => m.signatureMatch))
                                     .First();
 
-            //Find the length of the best match
-            var filter = bestModule.Max(cm => cm.signatureMatch);
-
-            //Get the best matches and sort by length
-            var bestMatches = bestModule.Where(cm => cm.signatureMatch == filter)
-                                        .OrderByDescending(cm => cm.signatureLength)
-                                        .ToList();
-
             //Check if we have a full match
-            if (CheckFullMatch(bestMatches.First()))
+            if (bestModule.Exists(m => m.signatureMatch == m.signatureLength))
             {
-                //Send to further processing
-                ProcessFullMatch(ctx, message, bestMatches.First());
-            }
-            //We do not respond to completely unknown stuff
-            else if (filter > 0)
-            {
-                //Send to further processing
-                ProcessPartialMatch(ctx, message, bestMatches);
-            }
-        }
+                //Grab it
+                var fullMatch = bestModule.First(m => m.signatureMatch == m.signatureLength);
 
-        private static bool CheckFullMatch(CommandMatch match)
-        {
-            //Check signature match
-            return (match.signatureMatch == match.signatureLength);
+                //Send to further processing
+                ProcessFullMatch(ctx, message, fullMatch);
+            }
+            else
+            {
+                //Find the length of the best match
+                var filter = bestModule.Max(cm => cm.signatureMatch);
+
+                //Get the best matches and sort by length
+                var bestMatches = bestModule.Where(cm => cm.signatureMatch == filter)
+                                            .OrderByDescending(cm => cm.signatureLength)
+                                            .ToList();
+
+                //Check that we matched at least one character (TODO: Improve this in the future)
+                if (filter > 0)
+                {
+                    //Send to further processing
+                    ProcessPartialMatch(ctx, message, bestMatches);
+                }
+            }
         }
 
         private static void ProcessFullMatch(Context ctx, string message, CommandMatch match)
