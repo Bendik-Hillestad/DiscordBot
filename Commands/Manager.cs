@@ -63,8 +63,17 @@ namespace DiscordBot.Commands
             //Catch any failed preconditions
             try
             {
-                //Invoke the command
-                match.cmd.Invoke(match.module, match.extractedParams);
+                //Catch exceptions thrown by the target and rethrow them
+                try
+                {
+                    //Invoke the command
+                    match.cmd.Invoke(match.module, match.extractedParams);
+                }
+                catch (TargetInvocationException ex)
+                {
+                    //Rethrow the actual exception
+                    throw ex.InnerException;
+                }
             }
             catch (PreconditionException ex)
             {
