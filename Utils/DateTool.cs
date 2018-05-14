@@ -18,6 +18,21 @@ namespace DiscordBot.Utils
             return true;
         }
 
+        public static string GetPrettyDate(long timestamp)
+        {
+            //Get default timezone offset
+            var offset = GetDefaultTimezone();
+
+            //Create a DateTimeOffset from the timestamp with our timezone
+            var date = DateTimeOffset.FromUnixTimeSeconds(timestamp)
+                                     .ToOffset(new TimeSpan(offset, 0, 0));
+
+            //Create a nicely formatted string
+            return $"{date.Day + Utility.GetOrdinal(date.Day)} of {Utility.GetMonth(date.Month)} {date.Year} at " +
+                   $"{Utility.PadNum(date.Hour)}:{Utility.PadNum(date.Minute)} " +
+                   $"{Utility.RenderTimezone(date.Offset.Hours)}";
+        }
+
         public static int GetDefaultYear(int day, int month)
         {
             //Get default timezone offset
