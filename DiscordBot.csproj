@@ -13,6 +13,7 @@
   
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
       <DefineConstants />
+      <LangVersion>7.3</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
