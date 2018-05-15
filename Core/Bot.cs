@@ -59,25 +59,37 @@ namespace DiscordBot.Core
             return instance;
         }
 
-        public void SendErrorMessage(ISocketMessageChannel channel, string title, string description)
+        public void SendErrorMessage(ISocketMessageChannel channel, string title, string description, string footer = null, DateTimeOffset? offset = null)
         {
-            //Create the message
-            var embed = new EmbedBuilder()
-                          .WithColor (Color.Red)
-                          .AddField  (title, description)
-                          .Build     ();
+            //Setup the embed builder
+            var builder = new EmbedBuilder().WithColor(Color.Red);
+
+            //Add Footer
+            if (footer != null) builder = builder.WithFooter(footer);
+
+            //Add offset (TODO: The ToUniversalTime can be omitted in a later version of the API)
+            if (offset.HasValue) builder = builder.WithTimestamp(offset.Value.ToUniversalTime());
+
+            //Add the field
+            var embed = builder.AddField(title, description).Build();
 
             //Send the message
             channel.SendMessageAsync("", false, embed).GetAwaiter().GetResult();
         }
 
-        public void SendSuccessMessage(ISocketMessageChannel channel, string title, string description)
+        public void SendSuccessMessage(ISocketMessageChannel channel, string title, string description, string footer = null, DateTimeOffset? offset = null)
         {
-            //Create the message
-            var embed = new EmbedBuilder()
-                          .WithColor(Color.Blue)
-                          .AddField(title, description)
-                          .Build();
+            //Setup the embed builder
+            var builder = new EmbedBuilder().WithColor(Color.Blue);
+
+            //Add Footer
+            if (footer != null) builder = builder.WithFooter(footer);
+
+            //Add offset (TODO: The ToUniversalTime can be omitted in a later version of the API)
+            if (offset.HasValue) builder = builder.WithTimestamp(offset.Value.ToUniversalTime());
+
+            //Add the field
+            var embed = builder.AddField(title, description).Build();
 
             //Send the message
             channel.SendMessageAsync("", false, embed).GetAwaiter().GetResult();
