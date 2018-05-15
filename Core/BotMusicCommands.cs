@@ -21,16 +21,16 @@ namespace DiscordBot.Core
         private void ConstructMusicCommands()
         {
             //Try to activate YouTube API
-            if (!string.IsNullOrEmpty(this.config.youtube_api_key))
+            if (!string.IsNullOrEmpty(BotConfig.Config.youtube_api_key))
             {
-                this.youtubeAPIKey = this.config.youtube_api_key;
+                this.youtubeAPIKey = BotConfig.Config.youtube_api_key;
             }
 
             //Try to activate Spotify API
-            if (!string.IsNullOrEmpty(this.config.spotify_client_id) && !string.IsNullOrEmpty(this.config.spotify_client_secret))
+            if (!string.IsNullOrEmpty(BotConfig.Config.spotify_client_id) && !string.IsNullOrEmpty(BotConfig.Config.spotify_client_secret))
             {
-                this.spotifyClientID     = this.config.spotify_client_id;
-                this.spotifyClientSecret = this.config.spotify_client_secret;
+                this.spotifyClientID     = BotConfig.Config.spotify_client_id;
+                this.spotifyClientSecret = BotConfig.Config.spotify_client_secret;
             }
 
             //Register our Music command category + commands

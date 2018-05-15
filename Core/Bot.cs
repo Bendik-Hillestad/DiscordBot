@@ -29,9 +29,6 @@ namespace DiscordBot.Core
                 AlwaysDownloadUsers = true
             });
 
-            //Setup empty config
-            this.config            = new Config();
-
             //Prepare the list holding command categories
             this.commandCategories = new List<CommandCategory>();
 
@@ -57,6 +54,11 @@ namespace DiscordBot.Core
 
             //Return the instance
             return instance;
+        }
+
+        public void SetStatus(string status)
+        {
+            this.client.SetGameAsync(status).GetAwaiter().GetResult();
         }
 
         public void SendErrorMessage(ISocketMessageChannel channel, string title, string description, string footer = null, DateTimeOffset? offset = null)
@@ -120,11 +122,8 @@ namespace DiscordBot.Core
 
         public async Task Run()
         {
-            //Read the config
-            this.config = Config.ReadConfig().Value;
-
             //Get the owner
-            this.ownerID = this.config.discord_owner_id;
+            this.ownerID = BotConfig.Config.discord_owner_id;
 
             //Run the command initializers
             CommandInit.GetCommandInitializers<Bot>().ToList()
@@ -153,7 +152,7 @@ namespace DiscordBot.Core
             this.StartMessageLoop();
 
             //Login
-            await client.LoginAsync(Discord.TokenType.Bot, this.config.discord_bot_token);
+            await client.LoginAsync(Discord.TokenType.Bot, BotConfig.Config.discord_bot_token);
             await client.StartAsync();
 
             //Wait until program exit
@@ -458,7 +457,6 @@ namespace DiscordBot.Core
         }
 
         private DiscordSocketClient        client;
-        private Config                     config;
         private List<CommandCategory>      commandCategories;
         private Queue<SocketUserMessage>   messageQueue;
         private ulong                      ownerID;

@@ -7,18 +7,23 @@ using Newtonsoft.Json;
 
 namespace DiscordBot.Core
 {
-    public struct Config
+    public class BotConfig
     {
-        public string discord_bot_token     { get; set; }
-        public ulong  discord_owner_id      { get; set; }
-        public string spotify_client_id     { get; set; }
-        public string spotify_client_secret { get; set; }
-        public string youtube_api_key       { get; set; }
+        public string discord_bot_token     { get; private set; }
+        public ulong  discord_owner_id      { get; private set; }
+        public string spotify_client_id     { get; private set; }
+        public string spotify_client_secret { get; private set; }
+        public string youtube_api_key       { get; private set; }
 
-        public static Config? ReadConfig()
+        public static BotConfig Config { get; } = ReadConfig();
+
+        private BotConfig()
+        {}
+
+        private static BotConfig ReadConfig()
         {
             //Catch any errors
-            return Debug.Try<Config?>(() =>
+            return Debug.Try(() =>
             {
                 //Open the config file
                 using (FileStream fs = File.Open("config.json", FileMode.Open, FileAccess.Read))
@@ -27,7 +32,7 @@ namespace DiscordBot.Core
                     StreamReader sr = new StreamReader(fs, Encoding.UTF8);
 
                     //Deserialise the JSON and return the configuration
-                    return JsonConvert.DeserializeObject<Config>(sr.ReadToEnd());
+                    return JsonConvert.DeserializeObject<BotConfig>(sr.ReadToEnd());
                 }
             }, null);
         }
