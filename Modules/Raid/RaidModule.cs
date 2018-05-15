@@ -198,6 +198,17 @@ namespace DiscordBot.Modules.Raid
             this.raid_add(ctx, (uint)handle.Value.raid_id, name, roles);
         }
 
+        [Command("raid kick {} <@{}>")]
+        public void raid_kick(Context ctx, uint id, ulong userID)
+        {
+            //Determine if a raid with this ID exists
+            var exists = RaidManager.EnumerateRaids().Any(r => r.raid_id == id);
+            Precondition.Assert(exists, $"No raid with that id ({id}).");
+
+            //Pass on to the implementation
+            this.raid_kick_impl(ctx, (int)id, userID, null);
+        }
+
         [Command("raid kick {} {}")]
         public void raid_kick(Context ctx, uint id, [RegexParameter(@"[\S\s]+")] string name)
         {
@@ -206,7 +217,7 @@ namespace DiscordBot.Modules.Raid
             Precondition.Assert(exists, $"No raid with that id ({id}).");
 
             //Pass on to the implementation
-            this.raid_kick_impl(ctx, (int)id, name);
+            this.raid_kick_impl(ctx, (int)id, null, name);
         }
 
         [Command("raid make comp {} {}")]
