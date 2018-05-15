@@ -21,3 +21,4 @@ x86/
 *.VC.db
 *.VC.VC.opendb
 *.ini
+*.json

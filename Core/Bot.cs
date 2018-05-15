@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
 
+using Discord;
 using Discord.WebSocket;
 
 using DiscordBot.Utils;
@@ -15,18 +17,20 @@ namespace DiscordBot.Core
     public sealed partial class Bot
     {
         private static readonly Type thistype = typeof(Bot);
+        private static          Bot  instance;
 
-        public Bot()
+        private Bot()
         {
             //Setup the client
             this.client = new DiscordSocketClient(new DiscordSocketConfig
             {
-                LogLevel          = Discord.LogSeverity.Verbose,
-                DefaultRetryMode  = Discord.RetryMode.AlwaysRetry
+                LogLevel            = Discord.LogSeverity.Verbose,
+                DefaultRetryMode    = Discord.RetryMode.AlwaysRetry,
+                AlwaysDownloadUsers = true
             });
 
-            //Initialize to null
-            this.config            = null;
+            //Setup empty config
+            this.config            = new Config();
 
             //Prepare the list holding command categories
             this.commandCategories = new List<CommandCategory>();
@@ -37,77 +41,106 @@ namespace DiscordBot.Core
             //Set owner to unknown
             this.ownerID           = 0;
 
-            //Mark that the Ready event has not fired yet
-            this.hasInit           = false;
+            //Initialise our command manager
+            bool e = Commands.Manager.InitialiseManager();
+            Debug.Assert(e, "Couldn't initialise manager!");
+        }
+
+        public static Bot GetBotInstance()
+        {
+            //Check if already created
+            if (instance == null)
+            {
+                //Create a new Bot instance
+                instance = new Bot();
+            }
+
+            //Return the instance
+            return instance;
+        }
+
+        public void SendErrorMessage(ISocketMessageChannel channel, string title, string description, string footer = null, DateTimeOffset? offset = null)
+        {
+            //Setup the embed builder
+            var builder = new EmbedBuilder().WithColor(Color.Red);
+
+            //Add Footer
+            if (footer != null) builder = builder.WithFooter(footer);
+
+            //Add offset (TODO: The ToUniversalTime can be omitted in a later version of the API)
+            if (offset.HasValue) builder = builder.WithTimestamp(offset.Value.ToUniversalTime());
+
+            //Add the field
+            var embed = builder.AddField(title, description).Build();
+
+            //Send the message
+            channel.SendMessageAsync("", false, embed).GetAwaiter().GetResult();
+        }
+
+        public void SendSuccessMessage(ISocketMessageChannel channel, string title, string description, string footer = null, DateTimeOffset? offset = null)
+        {
+            //Setup the embed builder
+            var builder = new EmbedBuilder().WithColor(Color.Blue);
+
+            //Add Footer
+            if (footer != null) builder = builder.WithFooter(footer);
+
+            //Add offset (TODO: The ToUniversalTime can be omitted in a later version of the API)
+            if (offset.HasValue) builder = builder.WithTimestamp(offset.Value.ToUniversalTime());
+
+            //Add the field
+            var embed = builder.AddField(title, description).Build();
+
+            //Send the message
+            channel.SendMessageAsync("", false, embed).GetAwaiter().GetResult();
+        }
+
+        public string GetUserName(SocketUserMessage context, ulong userID)
+        {
+            //Check if this was sent in a guild channel
+            if (context.Channel is SocketGuildChannel)
+            {
+                //Get the channel
+                var channel = context.Channel as SocketGuildChannel;
+
+                //Get the user
+                var user = channel.GetUser(userID);
+
+                //Check that it's not null
+                if (user != null)
+                {
+                    //Return the Nickname or Username
+                    return !string.IsNullOrEmpty(user.Nickname) ? user.Nickname : user.Username;
+                }
+            }
+
+            //Just return the userID as a string
+            return $"Unknown #{userID}";
         }
 
         public async Task Run()
         {
             //Read the config
-            this.config = Config.ReadConfig() ?? new Dictionary<string, string>();
+            this.config = Config.ReadConfig().Value;
 
             //Get the owner
-            this.ownerID = ulong.Parse(this.config["OwnerID"]);
+            this.ownerID = this.config.discord_owner_id;
 
-            //Grab the command initializers
-            var cmdInits = CommandInit.GetCommandInitializers<Bot>();
-
-            //Iterate over initializers
-            foreach (var init in cmdInits)
-            {
-                //Invoke method
-                init.Invoke(this, null);
-            }
-
-            //Create our reconnect timer
-            this.reconnectTimer = new Timer(async (o) =>
-            {
-                //Check that we're not connected
-                if (this.client.ConnectionState == Discord.ConnectionState.Connected) return;
-
-                //Log it
-                Logger.Log(LOG_LEVEL.INFO, "Attempting to reconnect.");
-
-                //Attempt to reconnect
-                await this.client.StopAsync ();
-                await this.client.LoginAsync(Discord.TokenType.Bot, this.config["BotToken"]);
-                await this.client.StartAsync();
-            }, null, Timeout.Infinite, 60 * 1000);
+            //Run the command initializers
+            CommandInit.GetCommandInitializers<Bot>().ToList()
+                       .ForEach(f => f.Invoke(this, null));
 
             //Add logger for Discord API messages
             this.client.Log += Logger.Log;
 
-            //Add disconnect handler
-            this.client.Disconnected += (e) =>
-            {
-                //Start timer
-                this.reconnectTimer.Change(60 * 1000, 60 * 1000);
-
-                //Return completed
-                return Task.CompletedTask;
-            };
-
             //Add ready handler
             this.client.Ready += () =>
             {
-                //Stop the timer
-                this.reconnectTimer.Change(Timeout.Infinite, 60 * 1000);
-
-                //Check that it's only run once
-                if (!this.hasInit)
+                //Set username
+                this.client.CurrentUser.ModifyAsync(u =>
                 {
-                    //Set username
-                    this.client.CurrentUser.ModifyAsync((u) =>
-                    {
-                        u.Username = "Grand Inquisitor";
-                    });
-                    
-                    //Start notifications checks
-                    this.StartNotificationsCheck();
-
-                    //Mark as run
-                    this.hasInit = true;
-                }
+                    u.Username = "Grand Inquisitor";
+                });
 
                 //Return completed
                 return Task.CompletedTask;
@@ -120,11 +153,33 @@ namespace DiscordBot.Core
             this.StartMessageLoop();
 
             //Login
-            await client.LoginAsync(Discord.TokenType.Bot, this.config["BotToken"]);
+            await client.LoginAsync(Discord.TokenType.Bot, this.config.discord_bot_token);
             await client.StartAsync();
 
             //Wait until program exit
             await Task.Delay(-1);
+        }
+
+        private void SendDM(ulong userID, string text)
+        {
+            try
+            {
+                //Get the user
+                var user = client.GetUser(userID);
+
+                //Create DM channel
+                var channel = user.GetOrCreateDMChannelAsync().GetAwaiter().GetResult();
+
+                //Send message
+                channel.SendMessageAsync(text);
+            }
+            catch { }
+        }
+
+        public void NotifyOwner(string text)
+        {
+            //Send DM to owner
+            this.SendDM(this.ownerID, text);
         }
 
         private string ProcessCommand(SocketUserMessage socketMsg, string commandText)
@@ -305,43 +360,13 @@ namespace DiscordBot.Core
             }
         }
 
-        private void AcknowledgeMessage(SocketUserMessage m)
-        {
-            //Get a lock to prevent race conditions
-            lock (this.importantMessageLock)
-            {
-                //Check if there even are any messages we need to acknowledge
-                if (this.importantMessages.Count == 0) return;
-
-                //Iterate over messages
-                foreach (QueuedMessage msg in this.importantMessages)
-                {
-                    //Check if the recipient matches
-                    if (((m.Channel as SocketDMChannel)?.Recipient?.Id ?? 0) == msg.userID)
-                    {
-                        //Check if content matches
-                        if (m.Content.Trim().Equals(msg.text.Trim()))
-                        {
-                            //Remove from queue
-                            this.importantMessages.Remove(msg);
-
-                            //Skip any further checks
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-
         private void StartMessageLoop()
         {
             //Start thread to process messages
             Task.Factory.StartNew(() =>
             {
-                begin:
-
                 //Catch any errors
-                try
+                begin: Debug.Try(() =>
                 {
                     //Loop forever
                     while (true)
@@ -360,38 +385,34 @@ namespace DiscordBot.Core
                         //Log message
                         Logger.Log("[" + msg.Author.Username + " -> " + msg.Channel.Name + "]: " + Utility.ReplaceEmojies(msg.Content));
 
-                        //Check if it's our own message
-                        if (msg.Author.Id == client.CurrentUser.Id)
+                        //Skip our own messages
+                        if (msg.Author.Id == client.CurrentUser.Id) continue;
+
+                        //Get all lines starting with one of !#$ followed by a command
+                        var matches = Regex.Matches(msg.Content, @"^[\!\#\$](\w+)", RegexOptions.Multiline);
+
+                        //Iterate through the matches
+                        for (int i = 0; i < matches.Count; i++)
                         {
-                            //Check if it's a message awaiting acknowledgement
-                            this.AcknowledgeMessage(msg);
+                            //Get the substring to test against
+                            string substr = null;
+                            if (i < matches.Count - 1)
+                            {
+                                //Get the string between current match and the next match
+                                substr = msg.Content.Substring(matches[i].Index, (matches[i + 1].Index - matches[i].Index));
+                            }
+                            else
+                            {
+                                //Get the rest of the string
+                                substr = msg.Content.Substring(matches[i].Index);
+                            }
 
-                            //Skip further work
-                            continue;
+                            //TODO: Run as a separate task, add timeout and shit
+                            //Process the command
+                            Commands.Manager.ProcessCommand(new Commands.Context { message = msg }, substr.Substring(1));
                         }
-
-                        //TODO: Run as a separate task, add timeout and shit
-                        //Process message further
-                        this.ProcessMessage(msg);
                     }
-                }
-                catch (AggregateException ae)
-                {
-                    //Get errors
-                    ae.Handle((ex) =>
-                    {
-                        //Log error
-                        Logger.Log(LOG_LEVEL.ERROR, ex.Message);
-
-                        //Mark as handled
-                        return true;
-                    });
-                }
-                catch (Exception ex)
-                {
-                    //Log error
-                    Logger.Log(LOG_LEVEL.ERROR, ex.Message);
-                }
+                });
 
                 //Go back to the beginning
                 goto begin;
@@ -437,13 +458,10 @@ namespace DiscordBot.Core
         }
 
         private DiscordSocketClient        client;
-        private Dictionary<string, string> config;
+        private Config                     config;
         private List<CommandCategory>      commandCategories;
         private Queue<SocketUserMessage>   messageQueue;
         private ulong                      ownerID;
-        private bool                       hasInit;
-
-        private Timer                      reconnectTimer;
 
         private readonly object            messageLock      = new object();
         private readonly Semaphore         messageSemaphore = new Semaphore(0, int.MaxValue);

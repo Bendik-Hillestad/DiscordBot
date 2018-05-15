@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using System.Threading;
-using System.Runtime.InteropServices;
 
 using Discord;
 using Discord.WebSocket;
@@ -18,25 +17,20 @@ namespace DiscordBot.Core
 {
     public sealed partial class Bot
     {
-#       pragma warning disable IDE1006
-        [DllImport("CppUtils")]
-        private static unsafe extern void s16le_vector_scalar_multiply(Int16* vec, Int32 count, Int32 scalar);
-#       pragma warning restore IDE1006
-
         [CommandInit]
         private void ConstructMusicCommands()
         {
             //Try to activate YouTube API
-            if (this.config.ContainsKey("YTAPIKey"))
+            if (!string.IsNullOrEmpty(this.config.youtube_api_key))
             {
-                this.youtubeAPIKey = this.config["YTAPIKey"];
+                this.youtubeAPIKey = this.config.youtube_api_key;
             }
 
             //Try to activate Spotify API
-            if (this.config.ContainsKey("STClientID") && this.config.ContainsKey("STClientSecret"))
+            if (!string.IsNullOrEmpty(this.config.spotify_client_id) && !string.IsNullOrEmpty(this.config.spotify_client_secret))
             {
-                this.spotifyClientID     = this.config["STClientID"];
-                this.spotifyClientSecret = this.config["STClientSecret"];
+                this.spotifyClientID     = this.config.spotify_client_id;
+                this.spotifyClientSecret = this.config.spotify_client_secret;
             }
 
             //Register our Music command category + commands
@@ -250,6 +244,9 @@ namespace DiscordBot.Core
                             var data   = this.source.Value.data;
                             var offset = 0;
 
+                            //Prepare a buffer
+                            var buffer = new Music.Samples { raw = new byte[blockSize] };
+
                             //Loop until skip is requested (or stream is over)
                             while (!this.skip)
                             {
@@ -259,21 +256,16 @@ namespace DiscordBot.Core
                                 //Check if there is more data
                                 if (byteCount > 0)
                                 {
-                                    //Setup an unsafe section so we can change the volume with our fast C code
-                                    unsafe
-                                    {
-                                        //Get a pointer to the data
-                                        fixed (byte* ptr = &data[offset])
-                                        {
-                                            //Change the volume
-                                            s16le_vector_scalar_multiply((short*)ptr, byteCount >> 1, (this.volume << 8) / 100);
-                                        }
-                                    }
+                                    //Copy into our buffer
+                                    Buffer.BlockCopy(data, offset, buffer.raw, 0, byteCount);
+
+                                    //Change the volume
+                                    Music.Audio.AdjustVolume(ref buffer, this.volume);
 
                                     //TODO: try { stream.write ... } catch { sleep }
 
                                     //Send data
-                                    this.audioOutStream.Write(data, offset, byteCount);
+                                    this.audioOutStream.Write(buffer.raw, 0, byteCount);
 
                                     //Update offset
                                     offset += byteCount;

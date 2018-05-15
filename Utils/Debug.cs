@@ -38,7 +38,7 @@ namespace DiscordBot.Utils
                 ae.Handle((ex) =>
                 {
                     //Log error
-                    Logger.Log(LOG_LEVEL.ERROR, ex.Message, method, lineNumber);
+                    Logger.Log(severity, ex.Message, method, lineNumber);
 
                     //Mark as handled
                     return true;
@@ -47,13 +47,13 @@ namespace DiscordBot.Utils
             catch (Exception ex)
             {
                 //Log error
-                Logger.Log(LOG_LEVEL.ERROR, ex.Message, method, lineNumber);
+                Logger.Log(severity, ex.Message, method, lineNumber);
 
                 //Check for inner exception
                 if (ex.InnerException != null)
                 {
                     //Log inner exception
-                    Logger.Log(LOG_LEVEL.ERROR, ex.InnerException.Message, method, lineNumber);
+                    Logger.Log(severity, ex.InnerException.Message, method, lineNumber);
                 }
             }
 
@@ -82,7 +82,7 @@ namespace DiscordBot.Utils
                 ae.Handle((ex) =>
                 {
                     //Log error
-                    Logger.Log(LOG_LEVEL.ERROR, ex.Message, method, lineNumber);
+                    Logger.Log(severity, ex.Message, method, lineNumber);
 
                     //Mark as handled
                     return true;
@@ -91,13 +91,13 @@ namespace DiscordBot.Utils
             catch (Exception ex)
             {
                 //Log error
-                Logger.Log(LOG_LEVEL.ERROR, ex.Message, method, lineNumber);
+                Logger.Log(severity, ex.Message, method, lineNumber);
 
                 //Check for inner exception
                 if (ex.InnerException != null)
                 {
                     //Log inner exception
-                    Logger.Log(LOG_LEVEL.ERROR, ex.InnerException.Message, method, lineNumber);
+                    Logger.Log(severity, ex.InnerException.Message, method, lineNumber);
                 }
             }
 

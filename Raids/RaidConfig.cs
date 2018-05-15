@@ -58,7 +58,7 @@ namespace DiscordBot.Raids
         public void AddCompDescription(CompDescription description)
         {
             //Make sure one with this name does not already exist
-            this.Compositions.RemoveAll((other) => string.Equals(description.Name, other.Name));
+            this.Compositions.RemoveAll(other => string.Equals(description.Name, other.Name));
 
             //Add composition description
             this.Compositions.Add(description);
@@ -84,7 +84,7 @@ namespace DiscordBot.Raids
         public void GenerateSolverLibrary()
         {
             //Calculate unique roles
-            var roles = this.GetRoles();
+            var roles = this.GetAllRoles();
 
             //Prepare the string to hold the final code
             string code = "";
@@ -231,21 +231,25 @@ namespace DiscordBot.Raids
             }), 10);
         }
 
-        public List<KeyValuePair<string, int>> GetRoleCounts(string compName)
+        public List<KeyValuePair<string, int>> GetRoleCounts(int compIdx)
         {
             //Find the comp
-            var comp = this.Compositions.Find((c) => string.Equals(compName, c.Name)).Layout;
+            var comp = this.Compositions.ElementAt(compIdx).Layout;
 
             //Count the occurrences of the roles in this comp
-            return this.GetRoles()
-                       .Select  ((r) =>
+            return this.GetAllRoles()
+                       .Select(r =>
                        {
-                           return new KeyValuePair<string, int>(r, comp.Count((s) => string.Equals(r, s)));
+                           return new KeyValuePair<string, int>
+                           (
+                               r,
+                               comp.Count(s => string.Equals(r, s))
+                           );
                        })
                        .ToList();
         }
 
-        public List<string> GetRoles()
+        public List<string> GetAllRoles()
         {
             return this.Compositions
                        .Select   ((desc) => desc.Layout.Distinct())
@@ -253,17 +257,25 @@ namespace DiscordBot.Raids
                        .ToList   ();
         }
 
+        public List<string> GetRolesForComp(int compIdx)
+        {
+            return this.Compositions
+                       .Select   (desc => desc.Layout.Distinct())
+                       .ElementAt(compIdx)
+                       .ToList   ();
+        }
+
         public List<string> GetCompNames()
         {
             return this.Compositions
-                       .Select((desc) => desc.Name)
+                       .Select(desc => desc.Name)
                        .ToList();
         }
 
         public int GetCompIndex(string name)
         {
             return this.Compositions
-                       .FindIndex((c) => string.Equals(c.Name, name));
+                       .FindIndex(c => string.Equals(c.Name, name));
         }
 
         //TODO: These should probably be queried from the library
@@ -271,10 +283,10 @@ namespace DiscordBot.Raids
         public int GetUserSizeInBytes()
         {
             //First calculate the base size
-            var baseSize = sizeof(ulong) + sizeof(float) * this.GetRoles().Count;
+            var baseSize = sizeof(ulong) + sizeof(float) * this.GetAllRoles().Count;
 
             //Add padding so that the total size is some multiple of sizeof(ulong)
-            return (baseSize + sizeof(ulong)) & ~(sizeof(ulong) - 1);
+            return (baseSize + sizeof(ulong) - 1) & ~(sizeof(ulong) - 1);
         }
 
         public int GetOutputBlockSizeInBytes()
