@@ -40,6 +40,10 @@ namespace DiscordBot.Core
 
             //Set owner to unknown
             this.ownerID           = 0;
+
+            //Initialise our command manager
+            bool e = Commands.Manager.InitialiseManager();
+            Debug.Assert(e, "Couldn't initialise manager!");
         }
 
         public static Bot GetBotInstance()

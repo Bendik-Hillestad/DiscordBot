@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Linq;
 
 using DiscordBot.Core;
+using DiscordBot.Utils;
 
 namespace DiscordBot.Commands
 {
@@ -10,14 +11,24 @@ namespace DiscordBot.Commands
     {
         private static List<CommandModuleBase> commandModules = null;
 
+        public static bool InitialiseManager()
+        {
+            //Catch any errors
+            return Debug.Try(() =>
+            {
+                //Check that we have no already loaded the modules
+                if (Manager.commandModules == null)
+                {
+                    //Load the modules
+                    Manager.commandModules = ModuleManager.GetAllModules(Assembly.GetExecutingAssembly());
+                }
+            });
+        }
+
         public static void ProcessCommand(Context ctx, int commandOffset)
         {
             //Grab the message
             var message = ctx.message.Content.Substring(commandOffset);
-
-            //Get the modules
-            if (Manager.commandModules == null)
-                Manager.commandModules = ModuleManager.GetAllModules(Assembly.GetExecutingAssembly());
 
             //Go through each module and check for matching commands
             var results = Manager.commandModules.Select(m => CommandProcessor.ProcessCommand(m, message))
