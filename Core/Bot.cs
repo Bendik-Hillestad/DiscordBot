@@ -388,15 +388,29 @@ namespace DiscordBot.Core
                         //Skip our own messages
                         if (msg.Author.Id == client.CurrentUser.Id) continue;
 
-                        //Only listen to owner atm
-                        if (msg.Author.Id != config.discord_owner_id) continue;
-                        if (!msg.Content.StartsWith("#")) continue;
+                        //Get all lines starting with one of !#$ followed by a command
+                        var matches = Regex.Matches(msg.Content, @"^[\!\#\$](\w+)", RegexOptions.Multiline);
 
-                        //Process the command
-                        Commands.Manager.ProcessCommand(new Commands.Context { message = msg }, 1);
-                        //TODO: Run as a separate task, add timeout and shit
-                        //Process message further
-                        //this.ProcessMessage(msg);
+                        //Iterate through the matches
+                        for (int i = 0; i < matches.Count; i++)
+                        {
+                            //Get the substring to test against
+                            string substr = null;
+                            if (i < matches.Count - 1)
+                            {
+                                //Get the string between current match and the next match
+                                substr = msg.Content.Substring(matches[i].Index, (matches[i + 1].Index - matches[i].Index));
+                            }
+                            else
+                            {
+                                //Get the rest of the string
+                                substr = msg.Content.Substring(matches[i].Index);
+                            }
+
+                            //TODO: Run as a separate task, add timeout and shit
+                            //Process the command
+                            Commands.Manager.ProcessCommand(new Commands.Context { message = msg }, substr.Substring(1));
+                        }
                     }
                 });
 

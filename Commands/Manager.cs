@@ -25,11 +25,8 @@ namespace DiscordBot.Commands
             });
         }
 
-        public static void ProcessCommand(Context ctx, int commandOffset)
+        public static void ProcessCommand(Context ctx, string message)
         {
-            //Grab the message
-            var message = ctx.message.Content.Substring(commandOffset);
-
             //Go through each module and check for matching commands
             var results = Manager.commandModules.Select(m => CommandProcessor.ProcessCommand(m, message))
                                                 .ToList();
