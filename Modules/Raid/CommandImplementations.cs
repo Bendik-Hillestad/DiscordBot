@@ -272,7 +272,7 @@ namespace DiscordBot.Modules.Raid
                 var title = $"{c.Key}:";
 
                 //Get all the members in this category
-                var members = bestComp.Select(e =>
+                var members = bestComp.Skip(offset).Take(c.Value).Select(e =>
                 {
                     //Check that it's not null
                     if (e.HasValue)
