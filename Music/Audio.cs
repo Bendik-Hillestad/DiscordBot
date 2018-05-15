@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 namespace DiscordBot.Music
 {
     [StructLayout(LayoutKind.Explicit)]
-    public unsafe struct Samples
+    public struct Samples
     {
         [FieldOffset(0)]
         public Byte[] raw;
