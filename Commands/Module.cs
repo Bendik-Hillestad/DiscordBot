@@ -26,7 +26,14 @@ namespace DiscordBot.Commands
 
         public CommandModule()
         {
+            //Log the loading
+            Logger.Log(LOG_LEVEL.INFO, $"Loading module {this.ModuleName}");
+
+            //Get the commands
             this.Commands = CommandManager.GetAllCommands(this);
+
+            //Run module-specific initialization logic
+            this.OnInit();
         }
     }
 
