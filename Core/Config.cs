@@ -9,11 +9,12 @@ namespace DiscordBot.Core
 {
     public class BotConfig
     {
-        public string discord_bot_token     { get; private set; }
-        public ulong  discord_owner_id      { get; private set; }
-        public string spotify_client_id     { get; private set; }
-        public string spotify_client_secret { get; private set; }
-        public string youtube_api_key       { get; private set; }
+        //TODO: Make set private again somehow (JsonConvert fails atm with private set)
+        public string discord_bot_token     { get; set; }
+        public ulong  discord_owner_id      { get; set; }
+        public string spotify_client_id     { get; set; }
+        public string spotify_client_secret { get; set; }
+        public string youtube_api_key       { get; set; }
 
         public static BotConfig Config { get; } = ReadConfig();
 
