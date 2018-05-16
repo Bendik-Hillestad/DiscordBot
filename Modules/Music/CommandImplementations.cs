@@ -151,10 +151,10 @@ namespace DiscordBot.Modules.Music
 
             //Calculate duration
             int dur = Regex.Match(videoInfo.Value.length, @"^(\d+)(?:\:(\d+))?(?:\:(\d+))?$").Groups
-                            .Select(g => g?.Value).Where(s => !string.IsNullOrWhiteSpace(s))
-                            .Skip  (1).Reverse()
-                            .Select((s, i) => int.Parse(s) * (int)(Math.Pow(60, i) + 0.5))
-                            .Sum   ();
+                           .Select(g => g?.Value).Where(s => !string.IsNullOrWhiteSpace(s))
+                           .Skip  (1).Reverse()
+                           .Select((s, i) => int.Parse(s) * (int)(Math.Pow(60, i) + 0.5))
+                           .Sum   ();
 
             //Check that it's not too long
             if (dur < 600)

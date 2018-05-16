@@ -56,15 +56,15 @@ namespace DiscordBot.Utils
                     } break;
                 }
 
-                //If error we also notify the owner
-                if (severity == LOG_LEVEL.ERROR) DiscordBot.Core.Bot.GetBotInstance().NotifyOwner($"[{DateTime.Now}| {severity,8}] {method},{lineNumber}: {message}");
-
                 //Write message
                 Console.WriteLine($"[{DateTime.Now}| {severity,8}] {method},{lineNumber}: {message}");
 
                 //Restore foreground color
                 Console.ForegroundColor = fc;
             }
+
+            //If error we also notify the owner
+            if (severity == LOG_LEVEL.ERROR) DiscordBot.Core.Bot.GetBotInstance().NotifyOwner($"[{DateTime.Now}| {severity,8}] {method},{lineNumber}: {message}");
         }
 
         public static Task Log(Discord.LogMessage msg)

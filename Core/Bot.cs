@@ -408,7 +408,14 @@ namespace DiscordBot.Core
 
                             //TODO: Run as a separate task, add timeout and shit
                             //Process the command
-                            Commands.Manager.ProcessCommand(new Commands.Context { message = msg }, substr.Substring(1));
+                            var e = Debug.Try(() => Commands.Manager.ProcessCommand(new Commands.Context { message = msg }, substr.Substring(1)));
+
+                            //Check if it failed
+                            if (!e)
+                            {
+                                //Send an error
+                                this.SendErrorMessage(msg.Channel, "Error", "Command failed.");
+                            }
                         }
                     }
                 });

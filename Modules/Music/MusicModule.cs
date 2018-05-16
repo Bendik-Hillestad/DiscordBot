@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,8 +18,19 @@ namespace DiscordBot.Modules.Music
     {
         public override string ModuleName => "Music";
 
+        [DllImport("opus", EntryPoint = "opus_get_version_string", CallingConvention = CallingConvention.Cdecl)]
+        private static extern IntPtr OpusVersionString();
+        [DllImport("libsodium", EntryPoint = "sodium_version_string", CallingConvention = CallingConvention.Cdecl)]
+        private static extern IntPtr SodiumVersionString();
+
         public override void OnInit()
         {
+            //Test dependencies
+            var opusVersion = Marshal.PtrToStringAnsi(OpusVersionString());
+            Logger.Log(LOG_LEVEL.INFO, $"Loaded opus with version string: {opusVersion}");
+            var sodiumVersion = Marshal.PtrToStringAnsi(SodiumVersionString());
+            Logger.Log(LOG_LEVEL.INFO, $"Loaded sodium with version string: {sodiumVersion}");
+
             //Make local copies of the config values we care about
             var bot = Bot.GetBotInstance();
             this.youtubeAPIKey       = BotConfig.Config.youtube_api_key;

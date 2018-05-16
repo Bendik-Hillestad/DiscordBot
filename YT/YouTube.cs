@@ -110,6 +110,10 @@ namespace DiscordBot.YT
                     //Split by lines
                     string[] lines = Regex.Split(str, @"\r\n|\r|\n");
 
+                    //Check that it's valid
+                    Utils.Debug.Assert(lines != null, "Lines are null");
+                    Utils.Debug.Assert(lines.Length >= 3, "Didn't get enough output");
+
                     //Get thumbnail
                     info.thumb = lines[0];
 
