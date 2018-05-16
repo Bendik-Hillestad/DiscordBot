@@ -394,6 +394,25 @@ namespace DiscordBot.Modules.Raid
             return weights;
         }
 
+        private static ulong HashEntry(Entry e)
+        {
+            unchecked
+            {
+                //Prepare the has with the FNV offset basis 
+                ulong hash = 14695981039346656037;
+
+                //Perform the main FNV-1a hash routine
+                foreach (char c in e.user_name)
+                {
+                    hash = hash ^ c;
+                    hash = hash * 1099511628211;
+                }
+
+                //Return the resulting hash value
+                return hash;
+            }
+        }
+
         private Entry?[] MakeRaidComp(in List<Entry> raiders, int compIdx)
         {
             //Get the roles
@@ -412,10 +431,20 @@ namespace DiscordBot.Modules.Raid
 
             //Iterate through the raiders
             var offset = input; var idx = 0;
-            raiders.ForEach((r) =>
+            raiders.ForEach(r =>
             {
+                //Get the user id
+                var id = r.user_id;
+
+                //Check if we don't have a user id
+                if (!r.user_id.HasValue)
+                {
+                    //Create a temporary id (we pray for no hash collision)
+                    id = HashEntry(r);
+                }
+
                 //Write the id into the array
-                Marshal.WriteInt64(offset, (Int64)r.user_id.Value);
+                Marshal.WriteInt64(offset, (Int64)id.Value);
                 var next = offset + userSize;
                 offset  += sizeof(ulong);
 
@@ -460,7 +489,7 @@ namespace DiscordBot.Modules.Raid
                 if (id != 0)
                 {
                     //Insert the right raider
-                    result[i] = raiders.Find(r => id == r.user_id);
+                    result[i] = raiders.Find(r => (r.user_id.HasValue) ? (r.user_id.Value == id) : (HashEntry(r) == id));
                 }
                 else result[i] = null;
             }
