@@ -38,7 +38,7 @@ namespace DiscordBot.Core
         private Dictionary<string, float> GetRoleWeights(Entry e, int compIdx)
         {
             //Filter the user's roles based on what this comp needs
-            var roles = e.roles.Union(this.raidConfig.GetRolesForComp(compIdx));
+            var roles = e.roles.Intersect(this.raidConfig.GetRolesForComp(compIdx));
 
             //Calculate the weights
             var weights = new Dictionary<string, float>();
@@ -70,7 +70,7 @@ namespace DiscordBot.Core
 
             //Iterate through the raiders
             var offset = input; var idx = 0;
-            raiders.ForEach((r) =>
+            raiders.ForEach(r =>
             {
                 //Write the id into the array
                 Marshal.WriteInt64(offset, (Int64)r.user_id.Value);
