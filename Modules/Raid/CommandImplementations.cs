@@ -69,7 +69,7 @@ namespace DiscordBot.Modules.Raid
 
             //Get the raiders that match the filter
             var roster = RaidManager.CoalesceRaiders(handle)
-                                    .Where (e => e.roles.Union(filter).Count() > 0)
+                                    .Where (e => e.roles.Intersect(filter).Count() > 0)
                                     .ToList();
 
             //Check that it's not empty
@@ -389,7 +389,7 @@ namespace DiscordBot.Modules.Raid
         private Dictionary<string, float> GetRoleWeights(Entry e, int compIdx)
         {
             //Filter the user's roles based on what this comp needs
-            var roles = e.roles.Union(this.raidConfig.GetRolesForComp(compIdx));
+            var roles = e.roles.Intersect(this.raidConfig.GetRolesForComp(compIdx));
 
             //Calculate the weights
             var weights = new Dictionary<string, float>();

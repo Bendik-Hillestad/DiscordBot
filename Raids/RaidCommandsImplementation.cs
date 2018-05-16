@@ -188,7 +188,7 @@ namespace DiscordBot.Core
         {
             //Get the raiders that match the filter
             var roster = RaidManager.CoalesceRaiders(handle)
-                                    .Where (e => e.roles.Union(filter).Count() > 0)
+                                    .Where (e => e.roles.Intersect(filter).Count() > 0)
                                     .ToList();
 
             //Check that it's not empty
