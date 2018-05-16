@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 
 namespace DiscordBot.Utils
 {
@@ -68,8 +69,8 @@ namespace DiscordBot.Utils
                 }
                 catch (TargetInvocationException tie)
                 {
-                    //Rethrow the real exception
-                    throw tie.InnerException;
+                    //Rethrow the actual exception
+                    ExceptionDispatchInfo.Capture(tie.InnerException).Throw();
                 }
             }
             catch (AggregateException ae)

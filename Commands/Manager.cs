@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Linq;
 
 using DiscordBot.Core;
@@ -80,7 +81,7 @@ namespace DiscordBot.Commands
                 catch (TargetInvocationException ex)
                 {
                     //Rethrow the actual exception
-                    throw ex.InnerException;
+                    ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
                 }
             }
             catch (PreconditionException ex)
