@@ -107,11 +107,13 @@ namespace DiscordBot.YT
                     //Get the output
                     string str = ytdl.StandardOutput.ReadToEndAsync().GetAwaiter().GetResult();
 
+                    Utils.Debug.Assert(!string.IsNullOrWhiteSpace(str), "No youtube-dl output");
+
                     //Split by lines
                     string[] lines = Regex.Split(str, @"\r\n|\r|\n");
 
                     //Check that it's valid
-                    Utils.Debug.Assert(lines != null, "Lines are null");
+                    Utils.Debug.Assert(lines != null,     "Lines are null");
                     Utils.Debug.Assert(lines.Length >= 3, "Didn't get enough output");
 
                     //Get thumbnail
