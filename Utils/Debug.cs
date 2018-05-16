@@ -30,6 +30,7 @@ namespace DiscordBot.Utils
         public static bool Try
         (
             Action f,
+            bool verbose = false,
             LOG_LEVEL severity = LOG_LEVEL.ERROR,
             [CallerMemberName] string method  = "",
             [CallerLineNumber] int lineNumber = 0
@@ -43,13 +44,14 @@ namespace DiscordBot.Utils
 
                 //No errors
                 return true;
-            }, false);
+            }, false, verbose);
         }
 
         public static T Try<T>
         (
             Func<T> f,
             T defaultValue,
+            bool verbose = false,
             LOG_LEVEL severity = LOG_LEVEL.ERROR,
             [CallerMemberName] string method  = "",
             [CallerLineNumber] int lineNumber = 0
@@ -75,23 +77,41 @@ namespace DiscordBot.Utils
                 //Get errors
                 ae.Handle((ex) =>
                 {
-                    //Log error
-                    Logger.Log(severity, FormatExceptionMessage(ex), method, lineNumber);
-
+                    //Check if verbose logging is desired
+                    if (verbose)
+                    {
+                        //Log error with full stacktrace
+                        Logger.Log(severity, ex.ToString(), method, lineNumber);
+                    }
+                    else
+                    {
+                        //Log error without full stacktrace
+                        Logger.Log(severity, FormatExceptionMessage(ex), method, lineNumber);
+                    }
+                    
                     //Mark as handled
                     return true;
                 });
             }
             catch (Exception ex)
             {
-                //Log error
-                Logger.Log(severity, FormatExceptionMessage(ex), method, lineNumber);
-
-                //Check for inner exception
-                if (ex.InnerException != null)
+                //Check if verbose logging is desired
+                if (verbose)
                 {
-                    //Log inner exception
-                    Logger.Log(severity, FormatExceptionMessage(ex.InnerException), method, lineNumber);
+                    //Log error with full stacktrace
+                    Logger.Log(severity, ex.ToString(), method, lineNumber);
+                }
+                else
+                {
+                    //Log error without full stacktrace
+                    Logger.Log(severity, FormatExceptionMessage(ex), method, lineNumber);
+
+                    //Check for inner exception
+                    if (ex.InnerException != null)
+                    {
+                        //Log inner exception
+                        Logger.Log(severity, FormatExceptionMessage(ex.InnerException), method, lineNumber);
+                    }
                 }
             }
 

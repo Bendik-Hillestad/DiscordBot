@@ -418,7 +418,7 @@ namespace DiscordBot.Core
                             }
                         }
                     }
-                });
+                }, true);
 
                 //Go back to the beginning
                 goto begin;
