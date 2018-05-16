@@ -79,7 +79,7 @@ namespace DiscordBot.Modules.Raid
                 var tmp = roster.Select(e =>
                 {
                     //Get the name
-                    var name = (e.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(ctx.message, e.user_id.Value)
+                    var name = (e.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(e.user_id.Value)
                                                     : e.user_name;
 
                     //Add the roles
@@ -159,13 +159,10 @@ namespace DiscordBot.Modules.Raid
                );
         }
 
-        private void raid_leave_impl(Context ctx, int id)
+        private void raid_leave_impl(Context ctx, RaidHandle handle, Entry e)
         {
-            //Get a handle to the raid
-            var handle = RaidManager.GetRaidFromID(id).Value;
-
             //Remove from the raid
-            RaidManager.RemoveRaider(handle, ctx.message.Author.Id);
+            RaidManager.RemoveRaider(handle, e);
 
             //Return success
             Bot.GetBotInstance()
@@ -205,11 +202,8 @@ namespace DiscordBot.Modules.Raid
                );
         }
 
-        private void raid_kick_impl(Context ctx, int id, ulong? userID, string name)
+        private void raid_kick_impl(Context ctx, RaidHandle handle, Entry e)
         {
-            //Get a handle to the raid
-            var handle = RaidManager.GetRaidFromID(id).Value;
-
             //Grab the data from the raid
             var data = RaidManager.GetRaidData(handle);
 
@@ -223,10 +217,7 @@ namespace DiscordBot.Modules.Raid
             Precondition.Assert(ctx.message.Author.Id == owner_id, "You are not the owner of the raid!");
 
             //Remove from the raid
-            if (userID.HasValue)
-                RaidManager.RemoveRaider(handle, userID.Value);
-            else
-                RaidManager.RemoveRaider(handle, name);
+            RaidManager.RemoveRaider(handle, e);
 
             //Return success
             Bot.GetBotInstance()
@@ -281,7 +272,7 @@ namespace DiscordBot.Modules.Raid
                         var entry = e.Value;
 
                         //Get their name
-                        return (entry.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(ctx.message, entry.user_id.Value)
+                        return (entry.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(entry.user_id.Value)
                                                         : entry.user_name;
                     }
 
@@ -302,7 +293,7 @@ namespace DiscordBot.Modules.Raid
                 //Get the names of the entries
                 var names = unused.Select(e =>
                 {
-                    return (e.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(ctx.message, e.user_id.Value)
+                    return (e.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(e.user_id.Value)
                                                 : e.user_name;
                 });
 

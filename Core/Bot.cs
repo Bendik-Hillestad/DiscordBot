@@ -38,6 +38,9 @@ namespace DiscordBot.Core
             //Set owner to unknown
             this.ownerID           = 0;
 
+            //Set the context to unknown
+            this.context           = null;
+
             //Initialise our command manager
             bool e = Commands.Manager.InitialiseManager();
             Debug.Assert(e, "Couldn't initialise manager!");
@@ -97,23 +100,21 @@ namespace DiscordBot.Core
             channel.SendMessageAsync("", false, embed).GetAwaiter().GetResult();
         }
 
-        public string GetUserName(SocketUserMessage context, ulong userID)
+        public string GetUserName(ulong userID)
         {
-            //Check if this was sent in a guild channel
-            if (context.Channel is SocketGuildChannel)
+            //Check if we have a context
+            if (this.context != null)
             {
-                //Get the channel
-                var channel = context.Channel as SocketGuildChannel;
-
-                //Get the user
-                var user = channel.GetUser(userID);
+                //Try to get the user
+                var user = this.context.GetUser(userID);
 
                 //Check that it's not null
                 if (user != null)
                 {
                     //Return the Nickname or Username
-                    return !string.IsNullOrEmpty(user.Nickname) ? user.Nickname : user.Username;
-                }
+                    return !string.IsNullOrEmpty(user.Nickname) ? user.Nickname
+                                                                : user.Username;
+                }    
             }
 
             //Just return the userID as a string
@@ -370,6 +371,9 @@ namespace DiscordBot.Core
                     //Loop forever
                     while (true)
                     {
+                        //Reset the context
+                        this.context = null;
+
                         //Wait for signal
                         this.messageSemaphore.WaitOne();
 
@@ -386,6 +390,9 @@ namespace DiscordBot.Core
 
                         //Skip our own messages
                         if (msg.Author.Id == client.CurrentUser.Id) continue;
+
+                        //Save the context
+                        this.context = (msg.Channel as SocketGuildChannel)?.Guild;
 
                         //Get all lines starting with one of !#$ followed by a command
                         var matches = Regex.Matches(msg.Content, @"^[\!\#\$](\w+)", RegexOptions.Multiline);
@@ -467,6 +474,7 @@ namespace DiscordBot.Core
         private List<CommandCategory>      commandCategories;
         private Queue<SocketUserMessage>   messageQueue;
         private ulong                      ownerID;
+        private SocketGuild                context;
 
         private readonly object            messageLock      = new object();
         private readonly Semaphore         messageSemaphore = new Semaphore(0, int.MaxValue);

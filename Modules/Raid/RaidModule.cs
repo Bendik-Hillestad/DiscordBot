@@ -12,6 +12,10 @@ namespace DiscordBot.Modules.Raid
     {
         public override string ModuleName => nameof(RaidModule);
 
+        //TODO: Raid complete stuff, gw2raidheroes? GitHub page etc?
+        //Upload logs to bot, store in raids/{id} folder?
+        //raid complete {id} {hh}:{mm} {notes}
+
         public override void OnInit()
         {
             //Initialise the raid manager
@@ -153,12 +157,20 @@ namespace DiscordBot.Modules.Raid
         [Command("raid leave {}")]
         public void raid_leave(Context ctx, uint id)
         {
-            //Determine if a raid with this ID exists
-            var exists = RaidManager.EnumerateRaids().Any(r => r.raid_id == id);
-            Precondition.Assert(exists, $"No raid with that id ({id}).");
+            //Get a handle to the raid
+            var handle = RaidManager.GetRaidFromID((int)id);
+
+            //Make sure it exists
+            Precondition.Assert(handle.HasValue, $"No raid with that id ({id}).");
+
+            //Find the raider in the roster
+            var player = RaidManager.FindRaider(handle.Value, ctx.message.Author.Id);
+
+            //Check that the raider exists in the roster
+            Precondition.Assert(player.HasValue, "You are not in the roster.");
 
             //Pass on to the implementation
-            this.raid_leave_impl(ctx, (int)id);
+            this.raid_leave_impl(ctx, handle.Value, player.Value);
         }
 
         [Command("raid leave")]
@@ -185,7 +197,7 @@ namespace DiscordBot.Modules.Raid
             this.raid_add_impl(ctx, (int)id, name, roles);
         }
 
-        [Command("raid add {}|{}")]
+        [Command("raid add {}:{}")]
         public void raid_add(Context ctx, [RegexParameter(@"[\S\s]+")] string name, [RegexParameter(@"[\S\s]+")] string roles)
         {
             //Get the next raid
@@ -201,23 +213,40 @@ namespace DiscordBot.Modules.Raid
         [Command("raid kick {} <@{}>")]
         public void raid_kick(Context ctx, uint id, ulong userID)
         {
-            //Determine if a raid with this ID exists
-            var exists = RaidManager.EnumerateRaids().Any(r => r.raid_id == id);
-            Precondition.Assert(exists, $"No raid with that id ({id}).");
+            //Get a handle to the raid
+            var handle = RaidManager.GetRaidFromID((int)id);
+
+            //Make sure it exists
+            Precondition.Assert(handle.HasValue, $"No raid with that id ({id}).");
+
+            //Find the raider that matches the ID
+            var player = RaidManager.FindRaider(handle.Value, userID);
+
+            //Check that the raider exists in the roster
+            Precondition.Assert(player.HasValue, "That raider is not in the roster.");
 
             //Pass on to the implementation
-            this.raid_kick_impl(ctx, (int)id, userID, null);
+            this.raid_kick_impl(ctx, handle.Value, player.Value);
         }
 
         [Command("raid kick {} {}")]
         public void raid_kick(Context ctx, uint id, [RegexParameter(@"[\S\s]+")] string name)
         {
-            //Determine if a raid with this ID exists
-            var exists = RaidManager.EnumerateRaids().Any(r => r.raid_id == id);
-            Precondition.Assert(exists, $"No raid with that id ({id}).");
+            //Get a handle to the raid
+            var handle = RaidManager.GetRaidFromID((int)id);
+
+            //Make sure it exists
+            Precondition.Assert(handle.HasValue, $"No raid with that id ({id}).");
+
+            //Find any raiders that match the name
+            var players = RaidManager.FindRaiders(handle.Value, name);
+
+            //Check that we got only one
+            Precondition.Assert(players.Count > 0,   "No one with that name.");
+            Precondition.Assert(players.Count == 1, $"More than one matches that name.");
 
             //Pass on to the implementation
-            this.raid_kick_impl(ctx, (int)id, null, name);
+            this.raid_kick_impl(ctx, handle.Value, players.First());
         }
 
         [Command("raid make comp {} {}")]

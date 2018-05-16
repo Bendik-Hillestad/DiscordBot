@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Linq;
 
+using DiscordBot.Core;
 using DiscordBot.Utils;
 
 using Newtonsoft.Json;
@@ -233,44 +234,69 @@ namespace DiscordBot.Raids
         /// Removes a raider from the roster.
         /// </summary>
         /// <param name="handle">The handle to the raid.</param>
-        /// <param name="user_id">The user's unique ID on Discord.</param>
-        public static bool RemoveRaider(RaidHandle handle, ulong user_id)
+        /// <param name="entry">The handle to the user.</param>
+        public static bool RemoveRaider(RaidHandle handle, Entry entry)
         {
             //Catch any errors
             return Debug.Try(() =>
             {
-                //Create a dummy entry to compare against
-                var entry = new Entry
+                //Open the raid file
+                using (FileStream fs = File.Open($"./raids/{handle.full_name}/raid.json", FileMode.Open, FileAccess.ReadWrite, FileShare.None))
                 {
-                    user_id   = user_id,
-                    user_name = null
-                };
+                    //Prepare the structure holding the data
+                    Raid raid;
 
-                //Remove the raider
-                RemoveRaider(handle, entry);
+                    //Get UTF-8 encoded text streams
+                    StreamReader sr = new StreamReader(fs, Encoding.UTF8);
+                    StreamWriter sw = new StreamWriter(fs, Encoding.UTF8);
+
+                    //Deserialise the JSON
+                    raid = JsonConvert.DeserializeObject<Raid>(sr.ReadToEnd());
+
+                    //Reset the stream
+                    fs.Seek     (0, SeekOrigin.Begin);
+                    fs.SetLength(0);
+
+                    //Remove the raider
+                    raid.roster.RemoveAll(e => e.Equals(entry));
+
+                    //Serialise the Raid object
+                    sw.Write(JsonConvert.SerializeObject(raid, Formatting.Indented));
+                    sw.Flush();
+                }
             });
         }
 
         /// <summary>
-        /// Removes a raider from the roster.
+        /// Finds any raiders that match a given name.
         /// </summary>
         /// <param name="handle">The handle to the raid.</param>
         /// <param name="user_name">The user's name.</param>
-        public static bool RemoveRaider(RaidHandle handle, string user_name)
+        public static List<Entry> FindRaiders(RaidHandle handle, string user_name)
         {
             //Catch any errors
             return Debug.Try(() =>
             {
-                //Create a dummy entry to compare against
-                var entry = new Entry
-                {
-                    user_id   = null,
-                    user_name = user_name
-                };
+                //Find any that match the name
+                return RaidManager.CoalesceRaiders(handle)
+                                  .Where (r => ResolveName(r).ToLower().Contains(user_name.ToLower()))
+                                  .ToList();
+            }, new List<Entry>(), severity: LOG_LEVEL.INFO);
+        }
 
-                //Remove the raider
-                RemoveRaider(handle, entry);
-            });
+        /// <summary>
+        /// Find the raider that matches the id.
+        /// </summary>
+        /// <param name="handle">The handle to the raid.</param>
+        /// <param name="user_id">The user's unique ID on Discord.</param>
+        public static Entry? FindRaider(RaidHandle handle, ulong user_id)
+        {
+            //Catch any errors
+            return Debug.Try<Entry?>(() =>
+            {
+                //Find the raider with the same id
+                return CoalesceRaiders(handle).First(r => r.user_id == user_id);
+            }, null, severity: LOG_LEVEL.INFO);
         }
 
         /// <summary>
@@ -387,32 +413,17 @@ namespace DiscordBot.Raids
             }
         }
 
-        private static void RemoveRaider(RaidHandle handle, Entry entry)
+        private static string ResolveName(Entry e)
         {
-            //Open the raid file
-            using (FileStream fs = File.Open($"./raids/{handle.full_name}/raid.json", FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            //Check if a name is available
+            if (!string.IsNullOrEmpty(e.user_name))
             {
-                //Prepare the structure holding the data
-                Raid raid;
-
-                //Get UTF-8 encoded text streams
-                StreamReader sr = new StreamReader(fs, Encoding.UTF8);
-                StreamWriter sw = new StreamWriter(fs, Encoding.UTF8);
-
-                //Deserialise the JSON
-                raid = JsonConvert.DeserializeObject<Raid>(sr.ReadToEnd());
-
-                //Reset the stream
-                fs.Seek     (0, SeekOrigin.Begin);
-                fs.SetLength(0);
-
-                //Remove the raider
-                raid.roster.RemoveAll(e => e.Equals(entry));
-
-                //Serialise the Raid object
-                sw.Write(JsonConvert.SerializeObject(raid, Formatting.Indented));
-                sw.Flush();
+                //Just return the name
+                return e.user_name;
             }
+
+            //Query for the name
+            return Bot.GetBotInstance().GetUserName(e.user_id.Value);
         }
 
         private static IEnumerable<Entry> GetRosterHistory(RaidHandle handle)
