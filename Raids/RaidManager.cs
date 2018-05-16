@@ -90,7 +90,7 @@ namespace DiscordBot.Raids
                 //Enumerate and return the handle with the earliest timestamp
                 return EnumerateRaids().OrderBy(r => r.timestamp)
                                        .First  ();
-            }, null, false, LOG_LEVEL.INFO);
+            }, null, severity: LOG_LEVEL.INFO);
         }
 
         /// <summary>
