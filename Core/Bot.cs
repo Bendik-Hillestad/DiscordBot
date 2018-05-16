@@ -43,10 +43,10 @@ namespace DiscordBot.Core
             Debug.Assert(e, "Couldn't initialise manager!");
         }
 
-        public static Bot GetBotInstance()
+        public static Bot GetBotInstance(bool initialiseIfNull = true)
         {
             //Check if already created
-            if (instance == null)
+            if (instance == null && initialiseIfNull)
             {
                 //Create a new Bot instance
                 instance = new Bot();
