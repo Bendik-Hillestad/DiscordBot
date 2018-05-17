@@ -1,4 +1,6 @@
 ﻿using System.Collections.Generic;
+using System.IO;
+using System.Text.RegularExpressions;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Linq;
@@ -8,6 +10,24 @@ using DiscordBot.Utils;
 
 namespace DiscordBot.Commands
 {
+    public static class StringExtension
+    {
+        public static IEnumerable<string> ReadLines(this string str)
+        {
+            //Wrap in a string reader
+            using (var sr = new StringReader(str))
+            {
+                //Read the lines
+                string line;
+                while ((line = sr.ReadLine()) != null)
+                {
+                    //Yield the line
+                    yield return line;
+                }
+            }
+        }
+    }
+
     public sealed class Manager
     {
         private static List<CommandModuleBase> commandModules = null;
@@ -43,25 +63,42 @@ namespace DiscordBot.Commands
                 var fullMatch = bestModule.Where(m => m.signatureMatch == m.signatureLength)
                                           .OrderByDescending(m => m.signatureMatch).First();
 
-                //Send to further processing
-                ProcessFullMatch(ctx, message, fullMatch);
-            }
-            else
-            {
-                //Find the length of the best match
-                var filter = bestModule.Max(cm => cm.signatureMatch);
+                //Check if there are additional characters after the matched string
+                if (message.Length > fullMatch.inputMatch)
+                {
+                    //Extract the remaining bit and read the first line
+                    var line = message.Substring(fullMatch.inputMatch)
+                                      .ReadLines().First();
 
-                //Get the best matches and sort by length
-                var bestMatches = bestModule.Where(cm => cm.signatureMatch == filter)
-                                            .OrderByDescending(cm => cm.signatureLength)
-                                            .ToList();
-
-                //Check that we matched at least one character (TODO: Improve this in the future)
-                if (filter > 0)
+                    //Check if they are all whitespace
+                    if (string.IsNullOrWhiteSpace(line))
+                    {
+                        //Send to further processing
+                        ProcessFullMatch(ctx, message, fullMatch);
+                        return;
+                    }
+                }
+                else
                 {
                     //Send to further processing
-                    ProcessPartialMatch(ctx, message, bestMatches);
+                    ProcessFullMatch(ctx, message, fullMatch);
+                    return;
                 }
+            }
+            
+            //Find the length of the best match
+            var filter = bestModule.Max(cm => cm.signatureMatch);
+
+            //Get the best matches and sort by length
+            var bestMatches = bestModule.Where(cm => cm.signatureMatch == filter)
+                                        .OrderByDescending(cm => cm.signatureLength)
+                                        .ToList();
+
+            //Check that we matched at least one character (TODO: Improve this in the future)
+            if (filter > 0)
+            {
+                //Send to further processing
+                ProcessPartialMatch(ctx, message, bestMatches);
             }
         }
 
