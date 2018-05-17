@@ -410,7 +410,7 @@ namespace DiscordBot.Raids
                 if (raid.sell && !entry.roles.Contains("BUYER"))
                 {
                     //Check if the roster cap of 8 has been reached
-                    if (raid.roster.Distinct().Count(e => !e.roles.Contains("BUYER")) > 8)
+                    if (raid.roster.Distinct().Count(e => !e.roles.Contains("BUYER")) >= 8)
                     {
                         //Force backup role
                         entry.backup = true;
