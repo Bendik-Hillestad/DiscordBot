@@ -17,13 +17,13 @@ namespace DiscordBot.Modules.Raid
         [DllImport("libherrington")]
         private static extern void solve(uint idx, IntPtr users, int length, IntPtr output);
 
-        private void raid_create_impl(Context ctx, int day, int month, int year, int hours, int minutes, int offset, string description)
+        private void raid_create_impl(Context ctx, int day, int month, int year, int hours, int minutes, int offset, string description, bool isSellingRaid = false)
         {
             //Get the date
             var date = new DateTimeOffset(year, month, day, hours, minutes, 0, new TimeSpan(offset, 0, 0));
 
             //Create the raid
-            var handle = RaidManager.CreateRaid(ctx.message.Author.Id, date, description).Value;
+            var handle = RaidManager.CreateRaid(ctx.message.Author.Id, date, description, isSellingRaid).Value;
 
             //Return success
             Bot.GetBotInstance()

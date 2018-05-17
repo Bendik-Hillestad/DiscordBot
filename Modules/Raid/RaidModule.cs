@@ -77,6 +77,43 @@ namespace DiscordBot.Modules.Raid
             this.raid_create(ctx, "today", 20, 00, offset, "W1-4");
         }
 
+        [Command("raid create sell {}/{} {}:{} UTC{} {}")]
+        public void raid_create_sell(Context ctx, uint day, uint month, uint hours, uint minutes, int offset, [RegexParameter(@"[\S\s]+")] string description)
+        {
+            //Derive the year
+            var year = DateTool.GetDefaultYear((int)day, (int)month);
+
+            //Validate our inputs
+            Precondition.Assert(DateTool.IsValidDate((int)day, (int)month, year), "Invalid date!");
+            Precondition.Assert(hours < 24, "Invalid hours!");
+            Precondition.Assert(minutes < 60, "Invalid minutes!");
+            Precondition.Assert(Math.Abs(offset) <= 12, "Invalid offset!");
+
+            //Pass on to the implementation
+            this.raid_create_impl(ctx, (int)day, (int)month, year, (int)hours, (int)minutes, offset, description, true);
+        }
+
+        [Command("raid create sell {} {}:{} UTC{} {}")]
+        public void raid_create_sell(Context ctx, [RegexParameter(@"today|tomorrow")] string day, uint hours, uint minutes, int offset, [RegexParameter(@"[\S\s]+")] string description)
+        {
+            //Get the current date
+            var date = DateTimeOffset.UtcNow.ToOffset(new TimeSpan(offset, 0, 0));
+            if (day == "tomorrow") date += new TimeSpan(1, 0, 0, 0);
+
+            //Pass on
+            this.raid_create_sell(ctx, (uint)date.Day, (uint)date.Month, hours, minutes, offset, description);
+        }
+
+        [Command("raid create sell")]
+        public void raid_create_sell(Context ctx)
+        {
+            //Get the default timezone offset
+            var offset = DateTool.GetDefaultTimezone();
+
+            //Pass on
+            this.raid_create_sell(ctx, "today", 20, 00, offset, "W1-4");
+        }
+
         [Command("raid delete {}")]
         public void raid_delete(Context ctx, uint id)
         {

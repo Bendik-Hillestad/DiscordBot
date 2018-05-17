@@ -26,6 +26,7 @@ namespace DiscordBot.Raids
         public long        timestamp   { get; set; }
         public string      description { get; set; }
         public List<Entry> roster      { get; set; }
+        public bool        sell        { get; set; }
     }
 
     public static class RaidManager
@@ -135,7 +136,7 @@ namespace DiscordBot.Raids
         /// <param name="owner_id">The raid owner's unique ID on Discord.</param>
         /// <param name="offset">The time offset for when the raid starts.</param>
         /// <param name="description">The description of the raid.</param>
-        public static RaidHandle? CreateRaid(ulong owner_id, DateTimeOffset offset, string description)
+        public static RaidHandle? CreateRaid(ulong owner_id, DateTimeOffset offset, string description, bool isSellingRaid = false)
         {
             //Catch any errors
             return Debug.Try<RaidHandle?>(() =>
@@ -150,7 +151,8 @@ namespace DiscordBot.Raids
                     raid_id     = handle.raid_id,
                     timestamp   = handle.timestamp,
                     description = description,
-                    roster      = new List<Entry>()
+                    roster      = new List<Entry>(),
+                    sell        = isSellingRaid
                 };
 
                 //Create the initial raid file
@@ -403,6 +405,17 @@ namespace DiscordBot.Raids
                 //Reset the stream
                 fs.Seek     (0, SeekOrigin.Begin);
                 fs.SetLength(0);
+
+                //Check if this is a selling raid and the entry is not a buyer
+                if (raid.sell && !entry.roles.Contains("BUYER"))
+                {
+                    //Check if the roster cap of 8 has been reached
+                    if (raid.roster.Distinct().Count(e => !e.roles.Contains("BUYER")) > 8)
+                    {
+                        //Force backup role
+                        entry.backup = true;
+                    }
+                }
 
                 //Append the raider
                 raid.roster.Add(entry);
