@@ -116,7 +116,7 @@ namespace DiscordBot.Modules.Raid
                     Bot.GetBotInstance()
                        .SendSuccessMessage(ctx.message.Channel,
                             r.description,
-                            $"Roster size: {r.roster.Count}",
+                            $"Roster size: {r.roster.Distinct().Count()}",
                             $"ID: {r.raid_id} | Local time:", DateTimeOffset.FromUnixTimeSeconds(r.timestamp)
                        );
                 });
