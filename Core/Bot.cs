@@ -10,8 +10,6 @@ using Discord.WebSocket;
 
 using DiscordBot.Utils;
 
-using Timer = System.Threading.Timer;
-
 namespace DiscordBot.Core
 {
     public sealed partial class Bot

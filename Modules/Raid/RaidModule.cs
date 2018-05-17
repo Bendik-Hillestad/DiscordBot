@@ -6,6 +6,8 @@ using DiscordBot.Raids;
 using DiscordBot.Utils;
 using DiscordBot.Core;
 
+using Timer = System.Timers.Timer;
+
 namespace DiscordBot.Modules.Raid
 {
     public partial class RaidModule : CommandModule<RaidModule>
@@ -26,6 +28,16 @@ namespace DiscordBot.Modules.Raid
 
             //Compile
             this.raidConfig.GenerateSolverLibrary();
+
+            //Create a timer to periodically clean up old raids
+            Timer t = new Timer(60 * 60 * 1000);
+            t.Elapsed += (s, e) =>
+            {
+                //Delete raids older than 5 hours
+                RaidManager.CleanRaidFiles(new TimeSpan(5, 0, 0));
+            };
+            t.AutoReset = true;
+            t.Start();
         }
 
         [Command("raid create {}/{} {}:{} UTC{} {}")]
