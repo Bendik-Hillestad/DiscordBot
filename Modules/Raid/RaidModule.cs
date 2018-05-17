@@ -243,7 +243,7 @@ namespace DiscordBot.Modules.Raid
             Precondition.Assert(exists, $"No raid with that id ({id}).");
 
             //Pass on to the implementation
-            this.raid_add_impl(ctx, (int)id, name, roles);
+            this.raid_add_impl(ctx, (int)id, name.Trim(), roles);
         }
 
         [Command("raid add {}:{}")]

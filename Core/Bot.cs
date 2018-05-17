@@ -27,9 +27,6 @@ namespace DiscordBot.Core
                 AlwaysDownloadUsers = true
             });
 
-            //Prepare the list holding command categories
-            this.commandCategories = new List<CommandCategory>();
-
             //Allocate queue to hold messages
             this.messageQueue      = new Queue<SocketUserMessage>();
 
@@ -124,10 +121,6 @@ namespace DiscordBot.Core
             //Get the owner
             this.ownerID = BotConfig.Config.discord_owner_id;
 
-            //Run the command initializers
-            CommandInit.GetCommandInitializers<Bot>().ToList()
-                       .ForEach(f => f.Invoke(this, null));
-
             //Add logger for Discord API messages
             this.client.Log += Logger.Log;
 
@@ -178,184 +171,6 @@ namespace DiscordBot.Core
         {
             //Send DM to owner
             this.SendDM(this.ownerID, text);
-        }
-
-        private string ProcessCommand(SocketUserMessage socketMsg, string commandText)
-        {
-            //Iterate over the categories
-            foreach (CommandCategory cc in this.commandCategories)
-            {
-                //Check for match
-                var categoryMatch = Regex.Match(commandText, cc.NameRegex, RegexOptions.IgnoreCase);
-                if (categoryMatch.Success)
-                {
-                    //Skip the category name
-                    var substr = commandText.Substring(categoryMatch.Length);
-
-                    //Save bestMatch outside the scope
-                    MatchResult bestMatch = null;
-
-                    //Check that the string is not empty after skipping category name
-                    if (!string.IsNullOrWhiteSpace(substr))
-                    {
-                        //Iterate over the commands
-                        foreach (Command cmd in cc.Commands)
-                        {
-                            //Determine how well it matches
-                            var match = cmd.CheckMatch(substr);
-
-                            //Check for complete match
-                            if (match.complete)
-                            {
-                                //Store match and skip further processing
-                                bestMatch = match;
-                                break;
-                            }
-                            //Name matches but there are parameters missing
-                            else if (match.nameMatch == NAME_MATCH.Matched)
-                            {
-                                //Check if this match is better than what's currently stored
-                                if
-                                (
-                                    ((bestMatch?.nameMatch ?? NAME_MATCH.None) != NAME_MATCH.Matched) ||
-                                    (match.matchedSubstring > (bestMatch?.matchedSubstring ?? 0))
-                                )
-                                {
-                                    //Store match
-                                    bestMatch = match;
-                                }
-                            }
-                            //Too many characters provided for the command
-                            else if (match.nameMatch == NAME_MATCH.Substring)
-                            {
-                                //Check if no other match has been found
-                                if ((bestMatch?.nameMatch ?? NAME_MATCH.None) == NAME_MATCH.None)
-                                {
-                                    //Store match
-                                    bestMatch = match;
-                                }
-                            }
-                            //TODO: Handle more advanced spelling mistakes?
-                        }
-                    }
-
-                    //Check if we got some kind of match
-                    if (bestMatch != null)
-                    {
-                        //Check for complete match
-                        if (bestMatch.complete)
-                        {
-                            //Try to invoke the method
-                            bestMatch.cmd.TryInvoke(socketMsg, bestMatch.parameters, out string s);
-                            
-                            //Return result
-                            return s;
-                        }
-                        //Partial match
-                        else if (bestMatch.nameMatch == NAME_MATCH.Matched)
-                        {
-                            //Check if we've matched more than just the name
-                            if (bestMatch.matchedSubstring > bestMatch.cmd.Name.Length)
-                            {
-                                //Return error message from parser
-                                return "```\n" +
-                                       $"{categoryMatch.Value}{substr}\n" +
-                                       (new String('-', categoryMatch.Length + bestMatch.matchedSubstring)) + "^```\n" +
-                                       bestMatch.msg;
-                            }
-                            else
-                            {
-                                //Return help information for command
-                                return bestMatch.cmd.GetHelp(socketMsg);
-                            }
-                        }
-                        //Substring match
-                        else
-                        {
-                            //Return "Did you mean"
-                            if (!string.IsNullOrWhiteSpace(cc.Name))
-                            {
-                                return "Did you mean: $" + cc.Name + " " + bestMatch.cmd.Name;
-                            }
-                            else
-                            {
-                                return "Did you mean: $" + bestMatch.cmd.Name;
-                            }
-                        }
-                    }
-                    //No match found, check if we matched the category name
-                    else if (!string.IsNullOrWhiteSpace(cc.Name))
-                    {
-                        //Return help information for category
-                        return cc.GetHelp();
-                    }
-                }
-            }
-
-            //Unrecognised category
-            return "Didn't recognise command.\nType $help for a full list of the supported commands.";
-        }
-
-        private void ProcessMessage(SocketUserMessage socketMsg)
-        {
-            //Get the message string
-            string msg = Utility.ReplaceEmojies(socketMsg.Content);
-
-            //Get all lines starting with "$somecommand"
-            var matches = Regex.Matches(msg, @"^[\$!](\w+)", RegexOptions.Multiline);
-
-            //Bailout if no matches
-            if (matches.Count == 0) return;
-
-            //Iterate through our matches
-            for (int i=0; i < matches.Count; i++)
-            {
-                //Setup response string
-                string resp = socketMsg.Author.Mention + " ";
-
-                //Send initial message
-                var responseMessage = socketMsg.Channel.SendMessageAsync
-                (
-                    resp + "processing..."
-                ).GetAwaiter().GetResult();
-            
-                //Get the substring to test against
-                string substr;
-                if (i < matches.Count - 1)
-                {
-                    //Get the string between current match and the next match
-                    substr = msg.Substring(matches[i].Index, (matches[i + 1].Index - matches[i].Index));
-                }
-                else
-                {
-                    //Get the rest of the string
-                    substr = msg.Substring(matches[i].Index);
-                }
-
-                //Skip the $
-                substr = substr.Substring(1);
-
-                //Trim it
-                substr = substr.Trim();
-
-                //Parse and execute if match is found
-                resp += this.ProcessCommand(socketMsg, substr);
-
-                //Check that the response is not too long
-                if (resp.Length < 2000)
-                {
-                    //Update response message
-                    responseMessage.ModifyAsync((prop) => prop.Content = resp);
-                }
-                else
-                {
-                    //Write error
-                    responseMessage.ModifyAsync((prop) => prop.Content = socketMsg.Author.Mention + " Error: Response is too long!");
-
-                    //Skip remaining commands
-                    break;
-                }
-            }
         }
 
         private void StartMessageLoop()
@@ -469,7 +284,6 @@ namespace DiscordBot.Core
         }
 
         private DiscordSocketClient        client;
-        private List<CommandCategory>      commandCategories;
         private Queue<SocketUserMessage>   messageQueue;
         private ulong                      ownerID;
         private SocketGuild                context;

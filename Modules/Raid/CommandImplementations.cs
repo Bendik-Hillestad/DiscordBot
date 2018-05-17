@@ -317,8 +317,8 @@ namespace DiscordBot.Modules.Raid
                     }
 
                     //Return the name with normal text
-                    return "*" + ((e.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(e.user_id.Value)
-                                                       : e.user_name) + "*";
+                    return ((e.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(e.user_id.Value)
+                                                 : e.user_name);
                 });
 
                 //Add the field
