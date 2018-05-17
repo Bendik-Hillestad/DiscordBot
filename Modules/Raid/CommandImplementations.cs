@@ -82,6 +82,13 @@ namespace DiscordBot.Modules.Raid
                     var name = (e.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(e.user_id.Value)
                                                     : e.user_name;
 
+                    //Check if this entry is a backup
+                    if (e.backup)
+                    {
+                        //Add the roles and cursive style
+                        return $"*{name} - {string.Join(", ", e.roles)}*";
+                    }
+
                     //Add the roles
                     return $"{name} - {string.Join(", ", e.roles)}";
                 }).ToList();
@@ -271,7 +278,15 @@ namespace DiscordBot.Modules.Raid
                         //Get the entry
                         var entry = e.Value;
 
-                        //Get their name
+                        //Check if this entry is a backup
+                        if (entry.backup)
+                        {
+                            //Return the name with cursive text
+                            return "*" + ((entry.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(entry.user_id.Value)
+                                                                   : entry.user_name) + "*";
+                        }
+
+                        //Return the name with normal text
                         return (entry.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(entry.user_id.Value)
                                                         : entry.user_name;
                     }
@@ -293,8 +308,17 @@ namespace DiscordBot.Modules.Raid
                 //Get the names of the entries
                 var names = unused.Select(e =>
                 {
-                    return (e.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(e.user_id.Value)
-                                                : e.user_name;
+                    //Check if this entry is a backup
+                    if (e.backup)
+                    {
+                        //Return the name with cursive text
+                        return "*" + ((e.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(e.user_id.Value)
+                                                           : e.user_name) + "*";
+                    }
+
+                    //Return the name with normal text
+                    return "*" + ((e.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(e.user_id.Value)
+                                                       : e.user_name) + "*";
                 });
 
                 //Add the field
