@@ -26,12 +26,11 @@ namespace DiscordBot.Modules.Core
             var now = utcNow.AddHours(dst ? 2 : 1);
 
             //Setup the embed builder
-            var builder = new EmbedBuilder().WithColor(Color.Blue)
-                                            .WithDescription("Current time");
+            var builder = new EmbedBuilder().WithColor(Color.Blue);
 
             //Add times
-            var embed = builder.AddInlineField( "Servertime:",       $"{utcNow.Hour,2}:{utcNow.Minute,2}")
-                               .AddInlineField($"CE{(dst?"S":"")}T", $"{now.Hour,2}:{now.Minute,2}")
+            var embed = builder.AddInlineField( "Servertime:",       $"{utcNow:HH:mm}")
+                               .AddInlineField($"CE{(dst?"S":"")}T", $"{now:HH:mm}")
                                .WithFooter    ( "Local time:").WithTimestamp(utcNow);
 
             //Send the message
