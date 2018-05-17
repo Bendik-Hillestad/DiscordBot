@@ -40,7 +40,8 @@ namespace DiscordBot.Commands
             if (bestModule.Exists(m => m.signatureMatch == m.signatureLength))
             {
                 //Grab it
-                var fullMatch = bestModule.First(m => m.signatureMatch == m.signatureLength);
+                var fullMatch = bestModule.Where(m => m.signatureMatch == m.signatureLength)
+                                          .OrderByDescending(m => m.signatureMatch).First();
 
                 //Send to further processing
                 ProcessFullMatch(ctx, message, fullMatch);
