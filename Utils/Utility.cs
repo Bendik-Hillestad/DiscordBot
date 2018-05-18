@@ -363,5 +363,20 @@ namespace DiscordBot.Utils
             //Get the temporary path from the OS
             return Path.Combine(Path.GetTempPath(), "DiscordBot\\");
         }
+
+        public static ulong RandomUInt64()
+        {
+            //Get a random number generator
+            Random r = new Random();
+
+            //Create buffer for the bytes
+            byte[] buf = new byte[8];
+
+            //Fill the buffer
+            r.NextBytes(buf);
+
+            //Return a 64-bit unsigned integer
+            return BitConverter.ToUInt64(buf, 0);
+        }
     }
 }

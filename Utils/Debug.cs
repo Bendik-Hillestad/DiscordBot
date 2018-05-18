@@ -1,63 +1,58 @@
 ﻿using System;
+using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 
 namespace DiscordBot.Utils
 {
     public static class Debug
     {
+        public sealed class AssertionFailureException : Exception
+        {
+            public AssertionFailureException(string msg) : base(msg)
+            { }
+        }
+
         public static void Assert(bool condition, string msg)
         {
             //Check if condition failed
             if (!condition)
             {
                 //Throw exception
-                throw new Exception($"Assertion failed! {msg}");
+                throw new AssertionFailureException($"Assertion failed! {msg}");
             }
+        }
+
+        public static string FormatExceptionMessage(Exception ex)
+        {
+            return $"{ex.GetType().Name}\n{ex.Message}\n\t    At: {ex.TargetSite.Name}";
         }
 
         public static bool Try
         (
             Action f,
+            bool verbose = false,
             LOG_LEVEL severity = LOG_LEVEL.ERROR,
             [CallerMemberName] string method  = "",
             [CallerLineNumber] int lineNumber = 0
         )
         {
-            //Catch any errors
-            try
+            //Catch any errors and return true if no errors, false otherwise
+            return Try<bool>(() =>
             {
-                //Do action
+                //Run the function
                 f();
 
-                //Return success
+                //No errors
                 return true;
-            }
-            catch (AggregateException ae)
-            {
-                //Get errors
-                ae.Handle((ex) =>
-                {
-                    //Log error
-                    Logger.Log(LOG_LEVEL.ERROR, ex.Message, method, lineNumber);
-
-                    //Mark as handled
-                    return true;
-                });
-            }
-            catch (Exception ex)
-            {
-                //Log error
-                Logger.Log(LOG_LEVEL.ERROR, ex.Message, method, lineNumber);
-            }
-
-            //Return failure
-            return false;
+            }, false, verbose);
         }
 
         public static T Try<T>
         (
             Func<T> f,
             T defaultValue,
+            bool verbose = false,
             LOG_LEVEL severity = LOG_LEVEL.ERROR,
             [CallerMemberName] string method  = "",
             [CallerLineNumber] int lineNumber = 0
@@ -66,25 +61,59 @@ namespace DiscordBot.Utils
             //Catch any errors
             try
             {
-                //Run the function and return the value from it
-                return f();
+                //Catch target invocation exceptions
+                try
+                {
+                    //Run the function and return the value from it
+                    return f();
+                }
+                catch (TargetInvocationException tie)
+                {
+                    //Rethrow the actual exception
+                    ExceptionDispatchInfo.Capture(tie.InnerException).Throw();
+                }
             }
             catch (AggregateException ae)
             {
                 //Get errors
                 ae.Handle((ex) =>
                 {
-                    //Log error
-                    Logger.Log(LOG_LEVEL.ERROR, ex.Message, method, lineNumber);
-
+                    //Check if verbose logging is desired
+                    if (verbose)
+                    {
+                        //Log error with full stacktrace
+                        Logger.Log(severity, ex.ToString(), method, lineNumber);
+                    }
+                    else
+                    {
+                        //Log error without full stacktrace
+                        Logger.Log(severity, FormatExceptionMessage(ex), method, lineNumber);
+                    }
+                    
                     //Mark as handled
                     return true;
                 });
             }
             catch (Exception ex)
             {
-                //Log error
-                Logger.Log(LOG_LEVEL.ERROR, ex.Message, method, lineNumber);
+                //Check if verbose logging is desired
+                if (verbose)
+                {
+                    //Log error with full stacktrace
+                    Logger.Log(severity, ex.ToString(), method, lineNumber);
+                }
+                else
+                {
+                    //Log error without full stacktrace
+                    Logger.Log(severity, FormatExceptionMessage(ex), method, lineNumber);
+
+                    //Check for inner exception
+                    if (ex.InnerException != null)
+                    {
+                        //Log inner exception
+                        Logger.Log(severity, FormatExceptionMessage(ex.InnerException), method, lineNumber);
+                    }
+                }
             }
 
             //Return the default value

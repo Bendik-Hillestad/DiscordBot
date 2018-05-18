@@ -1,8 +1,13 @@
 ﻿using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Diagnostics;
 
 using Newtonsoft.Json;
+
+using DiscordBot.Utils;
 
 namespace DiscordBot.Raids
 {
@@ -53,7 +58,7 @@ namespace DiscordBot.Raids
         public void AddCompDescription(CompDescription description)
         {
             //Make sure one with this name does not already exist
-            this.Compositions.RemoveAll((other) => string.Equals(description.Name, other.Name));
+            this.Compositions.RemoveAll(other => string.Equals(description.Name, other.Name));
 
             //Add composition description
             this.Compositions.Add(description);
@@ -62,7 +67,7 @@ namespace DiscordBot.Raids
         public void SaveConfig()
         {
             //Open/Create the file
-            using (FileStream fs = File.Open("raid_config.json", FileMode.OpenOrCreate, FileAccess.Write, FileShare.None))
+            using (FileStream fs = File.Open("raid_config.json", FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 using (StreamWriter sw = new StreamWriter(fs))
                 {
@@ -79,7 +84,7 @@ namespace DiscordBot.Raids
         public void GenerateSolverLibrary()
         {
             //Calculate unique roles
-            var roles = this.GetRoles();
+            var roles = this.GetAllRoles();
 
             //Prepare the string to hold the final code
             string code = "";
@@ -149,7 +154,6 @@ namespace DiscordBot.Raids
             }
 
             //End the switch
-            code += "default: UNREACHABLE;\n";
             code += "}\n";
 
             //End the public API
@@ -176,7 +180,7 @@ namespace DiscordBot.Raids
 
             //For easier debugging, format the text
 #           if DEBUG
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            Process.Start(new ProcessStartInfo
             {
                 FileName               = "clang-format",
                 Arguments              = "-style=file " +
@@ -188,45 +192,64 @@ namespace DiscordBot.Raids
             });
 #           endif
 
-            //Compile the code
-            var clang = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            Utility.WithRetry((i) => Utils.Debug.Try(() =>
             {
-                FileName               = "clang",
-                Arguments              = "-std=c++17 -fPIC -shared -fno-exceptions -fno-rtti -O3 " +
-                                         "-march=native -fvisibility=hidden -fvisibility-inlines-hidden " +
-                                         "-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic " +
-                                         "-Wno-padded -Wno-missing-prototypes ./libherrington/dllmain.cpp " +
-                                         "-o libherrington.so",
-                UseShellExecute        = false,
-                RedirectStandardOutput = false,
-                RedirectStandardError  = true
-            });
+                //Sleep between retries
+                if (i > 0) Thread.Sleep(100);
 
-            //Dump output (Not reading the error stream causes trouble with outputting the shared object)
-            System.Threading.Tasks.Task.Run(async () =>
-            {
-                using (FileStream fs = new FileStream("clang_error.txt", FileMode.Create))
+                //Delete the previous library just in case
+                if (File.Exists("libherrington.so")) File.Delete("libherrington.so");
+
+                //Compile the code
+                var clang = Process.Start(new ProcessStartInfo
                 {
-                    await clang.StandardError.BaseStream.CopyToAsync(fs);
-                }
-            }).GetAwaiter().GetResult();
+                    FileName               = "clang",
+                    Arguments              = "-std=c++17 -fPIC -shared -fno-exceptions -fno-rtti -O3 " +
+                                             "-march=native -fvisibility=hidden -fvisibility-inlines-hidden " +
+                                             "-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic " +
+                                             "-Wno-padded -Wno-missing-prototypes ./libherrington/dllmain.cpp " +
+                                             "-o libherrington.so",
+                    UseShellExecute        = false,
+                    RedirectStandardOutput = false,
+                    RedirectStandardError  = true
+                });
+
+                //Dump output (Not reading the error stream causes trouble with outputting the shared object)
+                Task.Run(async () =>
+                {
+                    using (FileStream fs = new FileStream("clang_error.txt", FileMode.Create))
+                    {
+                        await clang.StandardError.BaseStream.CopyToAsync(fs);
+                    }
+                }).GetAwaiter().GetResult();
+
+                //Make sure that clang actually exited
+                if (!clang.HasExited) clang.WaitForExit();
+
+                //Check that the file was generated
+                Utils.Debug.Assert(File.Exists("libherrington.so"), "Failed to create shared object.");
+            }), 10);
         }
 
-        public List<KeyValuePair<string, int>> GetRoleCounts(string compName)
+        public List<KeyValuePair<string, int>> GetRoleCounts(int compIdx)
         {
             //Find the comp
-            var comp = this.Compositions.Find((c) => string.Equals(compName, c.Name)).Layout;
+            var comp = this.Compositions.ElementAt(compIdx).Layout;
 
             //Count the occurrences of the roles in this comp
-            return this.GetRoles()
-                       .Select  ((r) =>
+            return this.GetAllRoles()
+                       .Select(r =>
                        {
-                           return new KeyValuePair<string, int>(r, comp.Count((s) => string.Equals(r, s)));
+                           return new KeyValuePair<string, int>
+                           (
+                               r,
+                               comp.Count(s => string.Equals(r, s))
+                           );
                        })
                        .ToList();
         }
 
-        public List<string> GetRoles()
+        public List<string> GetAllRoles()
         {
             return this.Compositions
                        .Select   ((desc) => desc.Layout.Distinct())
@@ -234,23 +257,33 @@ namespace DiscordBot.Raids
                        .ToList   ();
         }
 
+        public List<string> GetRolesForComp(int compIdx)
+        {
+            return this.Compositions
+                       .Select   (desc => desc.Layout.Distinct())
+                       .ElementAt(compIdx)
+                       .ToList   ();
+        }
+
         public List<string> GetCompNames()
         {
             return this.Compositions
-                       .Select((desc) => desc.Name)
+                       .Select(desc => desc.Name)
                        .ToList();
         }
 
         public int GetCompIndex(string name)
         {
             return this.Compositions
-                       .FindIndex((c) => string.Equals(c.Name, name));
+                       .FindIndex(c => string.Equals(c.Name, name));
         }
+
+        //TODO: These should probably be queried from the library
 
         public int GetUserSizeInBytes()
         {
             //First calculate the base size
-            var baseSize = sizeof(ulong) + sizeof(float) * this.GetRoles().Count;
+            var baseSize = sizeof(ulong) + sizeof(float) * this.GetAllRoles().Count;
 
             //Add padding so that the total size is some multiple of sizeof(ulong)
             return (baseSize + sizeof(ulong) - 1) & ~(sizeof(ulong) - 1);

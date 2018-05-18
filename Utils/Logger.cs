@@ -62,6 +62,9 @@ namespace DiscordBot.Utils
                 //Restore foreground color
                 Console.ForegroundColor = fc;
             }
+
+            //If error we also notify the owner
+            if (severity == LOG_LEVEL.ERROR) Core.Bot.GetBotInstance(false)?.NotifyOwner($"[{DateTime.Now}| {severity,8}] {method},{lineNumber}: {message}");
         }
 
         public static Task Log(Discord.LogMessage msg)
