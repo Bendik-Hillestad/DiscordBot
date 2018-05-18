@@ -97,7 +97,6 @@ namespace DiscordBot.Modules.Music
         {
             //Pass on to implementation
             this.music_np_impl(ctx);
-            Precondition.Assert(false, "Not implemented yet.");
         }
 
         public override string HelpMessage(Context ctx)
