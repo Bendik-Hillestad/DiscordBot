@@ -81,18 +81,22 @@ namespace DiscordBot.Modules.Music
         [Command("music skip")]
         public void music_skip(Context ctx)
         {
-            Precondition.Assert(false, "Not implemented yet.");
+            //Pass on to implementation
+            this.music_skip_impl(ctx);
         }
 
         [Command("music queue")]
         public void music_queue(Context ctx)
         {
-            Precondition.Assert(false, "Not implemented yet.");
+            //Pass on to implementation
+            this.music_queue_impl(ctx);
         }
 
         [Command("music np")]
         public void music_np(Context ctx)
         {
+            //Pass on to implementation
+            this.music_np_impl(ctx);
             Precondition.Assert(false, "Not implemented yet.");
         }
 

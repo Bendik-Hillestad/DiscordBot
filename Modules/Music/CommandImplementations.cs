@@ -190,6 +190,80 @@ namespace DiscordBot.Modules.Music
             }
         }
 
+        public void music_skip_impl(Context ctx)
+        {
+            //Check if we're connected
+            Precondition.Assert(this.audioClient != null, "Not connected to a voice channel.");
+
+            //Check if we're playing anything
+            Precondition.Assert(this.source != null, "Not playing anything.");
+
+            //Request skip
+            this.skip = true;
+
+            //Return success
+            Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
+                "Success",
+                "Skipping song" 
+            );
+        }
+
+        public void music_queue_impl(Context ctx)
+        {
+            //Grab the songs in the queue
+            var queue = (!string.IsNullOrWhiteSpace(this.source?.name)) ? ("\n--> " + this.source.Value.name) : "";
+            for (int i = 0; i < this.songQueue.Count; i++)
+            {
+                queue += "\n    " + this.songQueue.ElementAt(i).name;
+            }
+
+            //Show downloads
+            for (int i = 0; i < Math.Min(this.downloadQueue.Count, 7); i++)
+            {
+                queue += "\n    " + (this.downloadQueue.ElementAt(i).name ?? "<unresolved>");
+            }
+
+            //Check if there were any songs
+            if (!string.IsNullOrWhiteSpace(queue))
+            {
+                //Return queue
+                Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
+                    "Result:",
+                    $"```{queue}```"
+                );
+            }
+            else
+            {
+                //Return empty
+                Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
+                    "Result:",
+                    "None"
+                );
+            }
+        }
+
+        public void music_np_impl(Context ctx)
+        {
+            //Check if we're playing anything
+            if (!string.IsNullOrWhiteSpace(this.source?.name))
+            {
+                //Return the title
+                Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
+                    "Now playing:",
+                    this.source.Value.name
+                );
+            }
+            else
+            {
+                //Return the title
+                Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
+                    "Now playing:",
+                    "Nothing"
+                );
+            }
+            
+        }
+
         private static string GetYouTubeVideoID(string str)
         {
             //Check if it's just the id
