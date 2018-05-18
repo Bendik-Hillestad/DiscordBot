@@ -386,6 +386,41 @@ namespace DiscordBot.Modules.Raid
             }
         }
 
+        private void raid_delete_comp_impl(Context ctx, int compIdx)
+        {
+            //Delete the raid
+            this.raidConfig.Compositions.RemoveAt(compIdx);
+
+            //Save the config and recompile
+            Debug.Try(() =>
+            {
+                this.raidConfig.SaveConfig();
+                this.raidConfig.GenerateSolverLibrary();
+            });
+        }
+
+        private void raid_show_comps_impl(Context ctx)
+        {
+            //Get all the comps
+            var comps = this.raidConfig.Compositions;
+
+            //Setup the embed builder
+            var builder = new EmbedBuilder().WithColor(Color.Blue);
+
+            //Go through each composition we have
+            this.raidConfig.Compositions.ForEach(c =>
+            {
+                //Add the comp
+                builder = builder.AddField(c.Name, string.Join(", ", c.Layout));
+            });
+
+            //Build the embed
+            var embed = builder.Build();
+
+            //Send the message
+            ctx.message.Channel.SendMessageAsync("", false, embed).GetAwaiter().GetResult();
+        }
+
         private void raid_help_impl(Context ctx)
         {
             //Get all the commands and format them nicely

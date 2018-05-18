@@ -306,6 +306,45 @@ namespace DiscordBot.Modules.Raid
             this.raid_create_comp_impl(ctx, name, roles);
         }
 
+        [Command("raid delete comp {}")]
+        public void raid_delete_comp(Context ctx, [RegexParameter(@"[^ ]+")] string name)
+        {
+            //Check that they're not trying to delete the default comp
+            Precondition.Assert
+            (
+                !string.Equals(name.ToUpper(), "DEFAULT"),
+                "Cannot delete the default comp.\nOverwrite it instead."
+            );
+
+            //Get the index of the comp
+            var idx = this.raidConfig.GetCompIndex(name.ToUpper());
+
+            //Check that it exists
+            Precondition.Assert
+            (
+                idx != -1,
+                "No comp with that name. These are the recognised comps: \n" +
+                string.Join(", ", this.raidConfig.GetCompNames())
+            );
+
+            //Pass on to implementation
+            this.raid_delete_comp_impl(ctx, idx);
+        }
+
+        [Command("raid show comps")]
+        public void raid_show_comps(Context ctx)
+        {
+            //Pass on to implementation
+            this.raid_show_comps_impl(ctx);
+        }
+
+        [Command("raid list comps")]
+        public void raid_list_comps(Context ctx)
+        {
+            //Pass on to implementation
+            this.raid_show_comps_impl(ctx);
+        }
+
         [Command("raid help")]
         public void raid_help(Context ctx)
         {
