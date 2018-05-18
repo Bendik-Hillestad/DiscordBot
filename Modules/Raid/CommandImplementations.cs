@@ -105,6 +105,18 @@ namespace DiscordBot.Modules.Raid
             }
         }
 
+        private void raid_roles_impl(Context ctx)
+        {
+            //Get all the roles we recognize
+            var roles = this.raidConfig.GetAllRoles();
+
+            //Display the roles
+            Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
+                "Roles:",
+                string.Join(", ", roles)
+            );
+        }
+
         private void raid_list_impl(Context ctx)
         {
             //Generate the list of raids

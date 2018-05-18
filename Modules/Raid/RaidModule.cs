@@ -135,6 +135,13 @@ namespace DiscordBot.Modules.Raid
             this.raid_roster(ctx, (uint)handle.Value.raid_id);
         }
 
+        [Command("raid roles")]
+        public void raid_roles(Context ctx)
+        {
+            //Pass on to the implementation
+            this.raid_roles_impl(ctx);
+        }
+
         [Command("raid list")]
         public void raid_list(Context ctx)
         {
