@@ -7,6 +7,7 @@ using System.Net.Http.Headers;
 
 using DiscordBot.Core;
 using DiscordBot.Utils;
+using DiscordBot.Modules.Raid.GW2Raidar.Response;
 
 using Newtonsoft.Json;
 
@@ -16,6 +17,7 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
     {
         private static readonly string UPLOAD_URI          = @"https://www.gw2raidar.com/api/v2/encounters/new";
         private static readonly string LIST_ENCOUNTERS_URI = @"https://www.gw2raidar.com/api/v2/encounters?offset={0}&since={1}";
+        private static readonly string LIST_AREAS_URI      = @"https://www.gw2raidar.com/api/v2/areas";
 
         public static bool UploadLog(string path)
         {
@@ -70,7 +72,7 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
                 do
                 {
                     //Send our request
-                    var resp = ListEncounters(token, next);
+                    var resp = SendRequest<EncounterResponse>(token, next);
 
                     //Grab the results
                     results.AddRange(resp.results);
@@ -87,7 +89,37 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
             }, new List<EncounterResult>());
         }
 
-        private static ListResponse ListEncounters(string token, string next)
+        public static List<AreaResult> ListAreas()
+        {
+            //Catch any errors
+            return Debug.Try(() =>
+            {
+                //Get the token
+                var token = GetToken();
+
+                //Prepare our initial request
+                var next = LIST_AREAS_URI;
+
+                //Grab as many areas as we can until we got all of them
+                var results = new List<AreaResult>();
+                do
+                {
+                    //Send our request
+                    var resp = SendRequest<AreaResponse>(token, next);
+
+                    //Grab the results
+                    results.AddRange(resp.results);
+
+                    //Get the next uri
+                    next = resp.next;
+                } while (next != null);
+
+                //Return our results
+                return results;
+            }, new List<AreaResult>());
+        }
+
+        private static T SendRequest<T>(string token, string uri)
         {
             //Get a HttpClient
             using (var http = new HttpClient())
@@ -96,7 +128,7 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
                 http.DefaultRequestHeaders.Add("Authorization", $"Token {token}");
 
                 //Send the request
-                var ret = http.GetAsync(next).GetAwaiter().GetResult();
+                var ret = http.GetAsync(uri).GetAwaiter().GetResult();
 
                 //Check if it was successful
                 ret.EnsureSuccessStatusCode();
@@ -104,8 +136,8 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
                 //Read the json text
                 var jsonText = ret.Content.ReadAsStringAsync().GetAwaiter().GetResult();
 
-                //Parse JSON and return ListResponse object
-                return JsonConvert.DeserializeObject<ListResponse>(jsonText);
+                //Parse JSON and return the response object
+                return JsonConvert.DeserializeObject<T>(jsonText);
             }
         }
 
