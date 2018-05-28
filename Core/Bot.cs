@@ -119,7 +119,7 @@ namespace DiscordBot.Core
         public async Task Run()
         {
             //Get the owner
-            this.ownerID = BotConfig.Config.discord_owner_id;
+            this.ownerID = (ulong)(long)BotConfig.Config["discord_owner_id"];
 
             //Add logger for Discord API messages
             this.client.Log += Logger.Log;
@@ -144,7 +144,7 @@ namespace DiscordBot.Core
             this.StartMessageLoop();
 
             //Login
-            await client.LoginAsync(Discord.TokenType.Bot, BotConfig.Config.discord_bot_token);
+            await client.LoginAsync(Discord.TokenType.Bot, (string)BotConfig.Config["discord_bot_token"]);
             await client.StartAsync();
 
             //Wait until program exit
