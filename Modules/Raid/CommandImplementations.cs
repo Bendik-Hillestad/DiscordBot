@@ -1,8 +1,12 @@
 ﻿using System;
-using System.Linq;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 using Discord;
 using DiscordBot.Commands;
@@ -419,6 +423,95 @@ namespace DiscordBot.Modules.Raid
 
             //Send the message
             ctx.message.Channel.SendMessageAsync("", false, embed).GetAwaiter().GetResult();
+        }
+
+        private void raid_upload_logs_impl(Context ctx, int id)
+        {
+            //Get a handle to the raid
+            var handle = RaidManager.GetRaidFromID(id).Value;
+
+            //Determine the folder to unzip to
+            var dst = $"./raids/{handle.full_name}/logs/";
+
+            //Get the attachment
+            var attachment = ctx.message.Attachments.First();
+
+            //Send status report
+            var dlStatus = ctx.message.Channel.SendMessageAsync("Downloading...");
+
+            //Download it
+            Stream file = null;
+            using (var httpClient = new HttpClient())
+            {
+                file = httpClient.GetStreamAsync(attachment.Url).GetAwaiter().GetResult();
+            }
+
+            //Update status report
+            var msg = dlStatus.GetAwaiter().GetResult();
+            var zipStatus = msg.ModifyAsync(prop =>
+            {
+                prop.Content = "Unzipping...";
+            });
+
+            //Open the zip archive
+            using (var zip = new ZipArchive(file, ZipArchiveMode.Read))
+            {
+                //Unzip the file to the destination
+                zip.ExtractToDirectory(dst, true);
+            }
+
+            //Update status report
+            zipStatus.GetAwaiter().GetResult();
+            var uploadStatus = msg.ModifyAsync(prop =>
+            {
+                prop.Content = "Uploading...";
+            });
+
+            //Find all the logs
+            var logs = Directory.EnumerateFiles(dst)
+                                .Where (f => string.Equals(Path.GetExtension(f), ".evtc"))
+                                .ToList();
+
+            //Run the next part concurrently
+            Task.Run(() =>
+            {
+                //Asynchronously upload the logs
+                var tasks = logs.Select(log => Task.Run(() =>
+                {
+                    //TODO: Upload to GW2Raidar
+
+                    //Upload to dps.report
+                    var resp = DPSReport.Client.UploadLog(log);
+
+                    //Delete local log
+                    Debug.Try(() => File.Delete(log), severity: LOG_LEVEL.WARNING);
+
+                    //Store the response
+                    return resp;
+                })).ToArray();
+
+                //Wait for the uploads
+                Task.WaitAll(tasks);
+
+                //Get the links
+                var links = tasks.Select(t => t.Result)
+                                 .Where (r => string.IsNullOrEmpty(r.error))
+                                 .Select(r => new Tuple<int, string>(r.metadata.evtc.bossId, r.permalink))
+                                 .ToList();
+
+                //Setup the embed builder
+                var builder = new EmbedBuilder().WithColor(Color.Blue);
+
+                //Add all the bosses
+                links.ForEach(link => builder = builder.AddInlineField(""+link.Item1, $"[dps.report]({link.Item2})"));
+
+                //Send success message
+                msg.ModifyAsync(prop =>
+                {
+                    prop.Content = "";
+                    prop.Embed   = builder.WithDescription("Logs uploaded!").Build();
+                }).GetAwaiter().GetResult();
+            });
         }
 
         private void raid_help_impl(Context ctx)

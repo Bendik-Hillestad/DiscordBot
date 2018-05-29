@@ -345,6 +345,39 @@ namespace DiscordBot.Modules.Raid
             this.raid_show_comps_impl(ctx);
         }
 
+        [Command("raid upload logs {}")]
+        public void raid_upload_logs(Context ctx, uint id)
+        {
+            //Determine if a raid with this ID exists
+            var exists = RaidManager.EnumerateRaids().Any(r => r.raid_id == id);
+            Precondition.Assert(exists, $"No raid with that id ({id}).");
+
+            //Check that we got an attachment
+            Precondition.Assert(ctx.message.Attachments.Count > 0, "Missing attachment!");
+
+            //Get the attachment
+            var attachment = ctx.message.Attachments.First();
+
+            //Check that it's a zip file
+            Precondition.Assert(attachment.Filename.EndsWith(".zip"), "Only .zip files are accepted!");
+
+            //Pass on to the implementation
+            this.raid_upload_logs_impl(ctx, (int)id);
+        }
+
+        [Command("raid upload logs")]
+        public void raid_upload_logs(Context ctx)
+        {
+            //Get the next raid
+            var handle = RaidManager.GetNextRaid();
+
+            //Check if we have one
+            Precondition.Assert(handle.HasValue, "No raids up.");
+
+            //Pass on
+            this.raid_upload_logs(ctx, (uint)handle.Value.raid_id);
+        }
+
         [Command("raid help")]
         public void raid_help(Context ctx)
         {

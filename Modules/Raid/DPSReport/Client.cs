@@ -23,7 +23,8 @@ namespace DiscordBot.Modules.Raid.DPSReport
                 Debug.Assert(File.Exists(path), $"{path} does not exist!");
 
                 //Read the file
-                var file = new StreamContent(File.OpenRead(path));
+                var fs   = File.OpenRead(path);
+                var file = new StreamContent(fs);
                 file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
                 //Prepare our payload
@@ -38,6 +39,9 @@ namespace DiscordBot.Modules.Raid.DPSReport
 
                     //Check if it was successful
                     ret.EnsureSuccessStatusCode();
+
+                    //Make sure we have closed the file
+                    fs.Close();
 
                     //Read the json text
                     var jsonText = ret.Content.ReadAsStringAsync().GetAwaiter().GetResult();
