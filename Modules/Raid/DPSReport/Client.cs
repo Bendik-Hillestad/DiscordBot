@@ -1,4 +1,6 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 
@@ -22,32 +24,50 @@ namespace DiscordBot.Modules.Raid.DPSReport
                 //Check if the file exists
                 Debug.Assert(File.Exists(path), $"{path} does not exist!");
 
-                //Read the file
-                var fs   = File.OpenRead(path);
-                var file = new StreamContent(fs);
-                file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-
-                //Prepare our payload
-                var content = new MultipartFormDataContent();
-                content.Add(file, "file", Path.GetFileName(path));  
-
-                //Get a HttpClient
-                using (var http = new HttpClient())
+                //Open the file
+                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Delete, 4096, FileOptions.DeleteOnClose))
                 {
-                    //Send our file with a POST request
-                    var ret = http.PostAsync(UPLOAD_URI, content).GetAwaiter().GetResult();
+                    //Use the file as our content and mark with appropriate content type
+                    var file = new StreamContent(fs);
+                    file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
-                    //Check if it was successful
-                    ret.EnsureSuccessStatusCode();
+                    //Prepare our payload
+                    var content = new MultipartFormDataContent();
+                    content.Add(file, "file", Path.GetFileName(path));
 
-                    //Make sure we have closed the file
-                    fs.Close();
+                    //Get an HttpClient
+                    using (var http = new HttpClient())
+                    {
+                        //Set an infinite timeout because the server is slow. TODO: Should probably force it to close after 10+ minutes
+                        http.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
 
-                    //Read the json text
-                    var jsonText = ret.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                        //Prepare our container for the response
+                        string response = null;
 
-                    //Parse JSON and return the UploadResponse object
-                    return JsonConvert.DeserializeObject<UploadResponse>(jsonText);
+                        //Try to upload the log
+                        Utility.WithRetry(i => Debug.Try(() =>
+                        {
+                            //Prepare our request message
+                            var requestMessage = new HttpRequestMessage(HttpMethod.Post, UPLOAD_URI)
+                            {
+                                Version = HttpVersion.Version10,
+                                Content = content
+                            };
+
+                            //Send our request
+                            using (var tmp = http.SendAsync(requestMessage).GetAwaiter().GetResult())
+                            {
+                                //Check if it was successful
+                                tmp.EnsureSuccessStatusCode();
+
+                                //Assign the response
+                                response = tmp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                            }  
+                        }, severity: LOG_LEVEL.WARNING), 3);
+
+                        //Parse JSON and return the UploadResponse object
+                        return JsonConvert.DeserializeObject<UploadResponse>(response);
+                    }
                 }
             }, null);
         }
