@@ -108,10 +108,13 @@ namespace DiscordBot.Utils
                     Logger.Log(severity, FormatExceptionMessage(ex), method, lineNumber);
 
                     //Check for inner exception
-                    if (ex.InnerException != null)
+                    while (ex.InnerException != null)
                     {
                         //Log inner exception
                         Logger.Log(severity, FormatExceptionMessage(ex.InnerException), method, lineNumber);
+
+                        //Unwrap the exception
+                        ex = ex.InnerException;
                     }
                 }
             }
