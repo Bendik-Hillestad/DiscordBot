@@ -45,7 +45,7 @@ namespace DiscordBot.Utils
 
                 //No errors
                 return true;
-            }, false, verbose);
+            }, false, verbose, severity, method, lineNumber);
         }
 
         public static T Try<T>
