@@ -25,7 +25,7 @@ namespace DiscordBot.Utils
 
         public static string FormatExceptionMessage(Exception ex)
         {
-            return $"{ex.GetType().Name}\n{ex.Message}\n\t    At: {ex.TargetSite.Name}";
+            return $"{ex.GetType().Name}\n{ex.Message}\n\t    At: {ex.TargetSite?.Name}";
         }
 
         public static bool Try
