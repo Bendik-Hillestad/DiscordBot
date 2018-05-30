@@ -431,7 +431,7 @@ namespace DiscordBot.Modules.Raid
             var handle = RaidManager.GetRaidFromID(id).Value;
 
             //Determine the folder to unzip to
-            var dst = $"./raids/{handle.full_name}/logs/";
+            var dst = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + Path.DirectorySeparatorChar);
 
             //Get the attachment
             var attachment = ctx.message.Attachments.First();
@@ -472,7 +472,7 @@ namespace DiscordBot.Modules.Raid
                                 .Where (f => string.Equals(Path.GetExtension(f), ".evtc"))
                                 .ToList();
 
-            //Run the next part concurrently
+            //Run the next part concurrently so we don't block the bot itself
             Task.Run(() =>
             {
                 //Asynchronously upload the logs
@@ -483,9 +483,6 @@ namespace DiscordBot.Modules.Raid
                     //Upload to dps.report
                     var resp = DPSReport.Client.UploadLog(log);
 
-                    //Delete local log
-                    Debug.Try(() => File.Delete(log), severity: LOG_LEVEL.WARNING);
-
                     //Store the response
                     return resp;
                 })).ToArray();
@@ -495,7 +492,7 @@ namespace DiscordBot.Modules.Raid
 
                 //Get the links
                 var links = tasks.Select(t => t.Result)
-                                 .Where (r => string.IsNullOrEmpty(r.error))
+                                 .Where (r => r != null && string.IsNullOrEmpty(r.error))
                                  .Select(r => new Tuple<int, string>(r.metadata.evtc.bossId, r.permalink))
                                  .ToList();
 
@@ -511,6 +508,9 @@ namespace DiscordBot.Modules.Raid
                     prop.Content = "";
                     prop.Embed   = builder.WithDescription("Logs uploaded!").Build();
                 }).GetAwaiter().GetResult();
+
+                //Delete the directory
+                Debug.Try(() => Directory.Delete(dst), severity: LOG_LEVEL.WARNING);
             });
         }
 
