@@ -451,10 +451,28 @@ namespace DiscordBot.Modules.Raid
             });
 
             //Open the zip archive
+            var logs = new List<string>();
             using (var zip = new ZipArchive(file, ZipArchiveMode.Read))
             {
-                //Unzip the file to the destination
-                zip.ExtractToDirectory(dst, true);
+                //Get only the files that match the .evtc(.zip) extension
+                var regex = new Regex(@"[A-Za-z0-9\-_]+(\.evtc\.zip|\.evtc)");
+                var files = zip.Entries.Where(e => regex.IsMatch(e.Name));
+
+                //Eliminate any large files (>30MB)
+                files = files.Where(e => e.Length <= 3e+7);
+
+                //Only process the first 30 logs
+                files.Take(30).ToList().ForEach(e =>
+                {
+                    //Determine the path to extract to
+                    var path = Path.Combine(dst, e.Name);
+
+                    //Add to our list
+                    logs.Add(path);
+
+                    //Extract the log
+                    e.ExtractToFile(path, true);
+                });
             }
 
             //Update status report
@@ -463,11 +481,6 @@ namespace DiscordBot.Modules.Raid
             {
                 prop.Content = "Uploading...";
             });
-
-            //Find all the logs
-            var logs = Directory.EnumerateFiles(dst)
-                                .Where (f => string.Equals(Path.GetExtension(f), ".evtc"))
-                                .ToList();
 
             //Run the next part concurrently so we don't block the bot itself
             Task.Run(() =>
