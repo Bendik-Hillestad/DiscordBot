@@ -38,8 +38,8 @@ namespace DiscordBot.Modules.Raid.DPSReport
                     //Get an HttpClient
                     using (var http = new HttpClient())
                     {
-                        //Set an infinite timeout because the server is slow. TODO: Should probably force it to close after 10+ minutes
-                        http.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+                        //Set a really long timeout because the server is slow.
+                        http.Timeout = TimeSpan.FromMinutes(30);
 
                         //Prepare our container for the response
                         string response = null;
