@@ -14,6 +14,8 @@ using DiscordBot.Core;
 using DiscordBot.Raids;
 using DiscordBot.Utils;
 
+using static DiscordBot.Modules.Raid.GW2Raidar.Utility;
+
 namespace DiscordBot.Modules.Raid
 {
     public partial class RaidModule : CommandModule<RaidModule>
@@ -488,42 +490,107 @@ namespace DiscordBot.Modules.Raid
             //Run the next part concurrently so we don't block the bot itself
             Task.Run(() =>
             {
+                //Get the timestamp of the message which we will use as a tag
+                var tag = $"{ctx.message.Timestamp.ToUnixTimeSeconds()}";
+
                 //Asynchronously upload the logs
                 var tasks = logs.Select(log => Task.Run(() =>
                 {
-                    //TODO: Upload to GW2Raidar
+                    //Upload to GW2Raidar first since it's non-blocking and we get no response
+                    GW2Raidar.Client.UploadLog(log, tag);
 
-                    //Upload to dps.report
-                    var resp = DPSReport.Client.UploadLog(log);
-
-                    //Store the response
-                    return resp;
+                    //Upload to dps.report and store the response
+                    return DPSReport.Client.UploadLog(log);
                 })).ToArray();
 
-                //Wait for the uploads
+                //Wait for the dps.report uploads
                 Task.WaitAll(tasks);
-
-                //Get the links
-                var links = tasks.Select(t => t.Result)
-                                 .Where (r => r != null && string.IsNullOrEmpty(r.error))
-                                 .Select(r => new Tuple<int, string>(r.metadata.evtc.bossId, r.permalink))
-                                 .ToList();
-
-                //Setup the embed builder
-                var builder = new EmbedBuilder().WithColor(Color.Blue);
-
-                //Add all the bosses
-                links.ForEach(link => builder = builder.AddInlineField(""+link.Item1, $"[dps.report]({link.Item2})"));
-
-                //Send success message
-                msg.ModifyAsync(prop =>
-                {
-                    prop.Content = "";
-                    prop.Embed   = builder.WithDescription("Logs uploaded!").Build();
-                }).GetAwaiter().GetResult();
 
                 //Delete the directory
                 Debug.Try(() => Directory.Delete(dst), severity: LOG_LEVEL.WARNING);
+
+                //Get the dps.report links
+                var report = tasks.Select (t => t.Result)
+                                  .Where  (r => r != null && string.IsNullOrEmpty(r.error))
+                                  .Select (r => new Tuple<int, string>(r.metadata.evtc.bossId, r.permalink))
+                                  .ToList ();
+
+                //Get the boss names
+                var bossNames = report.Select(r => TranslateBossID(r.Item1));
+
+                //Setup a dictionary to contain gw2raidar results
+                var bossDict = new Dictionary<string, GW2Raidar.Response.EncounterResult>();
+                foreach (var name in bossNames) bossDict.Add(name, null);
+
+                //We have no good way of interacting with gw2raidar so we just keep polling it
+                int repeatCount = 0;
+                while (repeatCount < 10)
+                {
+                    //Poll gw2raidar for results
+                    GW2Raidar.Client.FindEncounters(ref bossDict, tag);
+
+                    //Get the gw2raidar links
+                    var raidar = bossDict.Select(kv => kv.Value)
+                                         .Where (r  => r != null)
+                                         .Select(r  => new Tuple<int, string>(r.area_id, @"https://www.gw2raidar.com/encounter/" + r.url_id))
+                                         .ToList();
+
+                    //Combine the links
+                    var combined = report.Select(t =>
+                    {
+                        //Find the matching gw2raidar link
+                        var other = raidar.FirstOrDefault(t2 => t2.Item1 == t.Item1);
+
+                        //Format the gw2raidar link for discord
+                        var raidarLink = !string.IsNullOrEmpty(other?.Item2) ? $"[gw2raidar]({other.Item2})"
+                                                                             : $"gw2raidar processing";
+
+                        //Format the dps.report link for discord
+                        var reportLink = $"[dps.report]({t.Item2})";
+
+                        //Get the name for the boss
+                        var bossName = TranslateBossID(t.Item1);
+
+                        //Combine the links
+                        var links = $"{reportLink} · {raidarLink}";
+
+                        //Return tuple
+                        return new Tuple<int, string, string>(t.Item1, bossName, links);
+                    });
+
+                    //Group the links by wing
+                    var groups = combined.GroupBy(t => GetBossIDOrder(t.Item1).Item1)
+                                         .ToList ();
+
+                    //Setup the embed builder
+                    var builder = new EmbedBuilder().WithColor(Color.Blue);
+
+                    //Go through the groups
+                    groups.ForEach(g =>
+                    {
+                        //Sort the encounters and process them
+                        g.OrderByDescending(t => GetBossIDOrder(t.Item1).Item2)
+                         .ToList().ForEach(t =>
+                        {
+                            //Add links
+                            builder.AddInlineField(t.Item2, t.Item3);
+                        });
+                    });
+
+                    //Send success message
+                    msg.ModifyAsync(prop =>
+                    {
+                        prop.Content = "";
+                        prop.Embed   = builder.WithDescription("Logs uploaded!").Build();
+                    }).GetAwaiter().GetResult();
+
+                    //Break if there were no null results from gw2raidar
+                    if (bossDict.Count(kv => kv.Value == null) == 0) break;
+
+                    //Wait two minutes
+                    System.Threading.Thread.Sleep(2 * 60 * 1000);
+                    repeatCount++;
+                }
             });
         }
 
