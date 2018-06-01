@@ -430,6 +430,9 @@ namespace DiscordBot.Modules.Raid
             //Determine the folder to unzip to
             var dst = Path.Combine(Utility.GetTempDirectory(), Path.GetRandomFileName() + Path.DirectorySeparatorChar);
 
+            //Make sure the folder exists
+            Directory.CreateDirectory(dst);
+
             //Get the attachment
             var attachment = ctx.message.Attachments.First();
 
