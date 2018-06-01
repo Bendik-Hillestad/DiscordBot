@@ -428,7 +428,7 @@ namespace DiscordBot.Modules.Raid
         private void raid_upload_logs_impl(Context ctx)
         {
             //Determine the folder to unzip to
-            var dst = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + Path.DirectorySeparatorChar);
+            var dst = Path.Combine(Utility.GetTempDirectory(), Path.GetRandomFileName() + Path.DirectorySeparatorChar);
 
             //Get the attachment
             var attachment = ctx.message.Attachments.First();

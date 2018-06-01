@@ -361,7 +361,7 @@ namespace DiscordBot.Utils
             }
 
             //Get the temporary path from the OS
-            return Path.Combine(Path.GetTempPath(), "DiscordBot\\");
+            return Path.Combine(Path.GetTempPath(), "DiscordBot" + Path.DirectorySeparatorChar);
         }
 
         public static ulong RandomUInt64()
