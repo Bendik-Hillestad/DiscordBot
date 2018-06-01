@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 
@@ -156,11 +157,21 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
                     //Get a HttpClient
                     using (var http = new HttpClient())
                     {
+                        //Set a fairly long timeout in case of slow internet
+                        http.Timeout = TimeSpan.FromMinutes(10);
+
+                        //Prepare our request message
+                        var requestMessage = new HttpRequestMessage(HttpMethod.Put, UPLOAD_URI)
+                        {
+                            Version = HttpVersion.Version10,
+                            Content = content
+                        };
+
                         //Put our token in the header
                         http.DefaultRequestHeaders.Add("Authorization", $"Token {token}");
 
                         //Send our file with a PUT request
-                        var ret = http.PutAsync(UPLOAD_URI, content).GetAwaiter().GetResult();
+                        var ret = http.SendAsync(requestMessage).GetAwaiter().GetResult();
 
                         //Check if it was successful
                         ret.EnsureSuccessStatusCode();
