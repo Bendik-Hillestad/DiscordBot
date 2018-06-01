@@ -14,10 +14,6 @@ namespace DiscordBot.Modules.Raid
     {
         public override string ModuleName => nameof(RaidModule);
 
-        //TODO: Raid complete stuff, gw2raidheroes? GitHub page etc?
-        //Upload logs to bot, store in raids/{id} folder?
-        //raid complete {id} {hh}:{mm} {notes}
-
         public override void OnInit()
         {
             //Initialise the raid manager
@@ -345,13 +341,9 @@ namespace DiscordBot.Modules.Raid
             this.raid_show_comps_impl(ctx);
         }
 
-        [Command("raid upload logs {}")]
-        public void raid_upload_logs(Context ctx, uint id)
+        [Command("raid upload logs")]
+        public void raid_upload_logs(Context ctx)
         {
-            //Determine if a raid with this ID exists
-            var exists = RaidManager.EnumerateRaids().Any(r => r.raid_id == id);
-            Precondition.Assert(exists, $"No raid with that id ({id}).");
-
             //Check that we got an attachment
             Precondition.Assert(ctx.message.Attachments.Count > 0, "Missing attachment!");
 
@@ -362,20 +354,7 @@ namespace DiscordBot.Modules.Raid
             Precondition.Assert(attachment.Filename.EndsWith(".zip"), "Only .zip files are accepted!");
 
             //Pass on to the implementation
-            this.raid_upload_logs_impl(ctx, (int)id);
-        }
-
-        [Command("raid upload logs")]
-        public void raid_upload_logs(Context ctx)
-        {
-            //Get the next raid
-            var handle = RaidManager.GetNextRaid();
-
-            //Check if we have one
-            Precondition.Assert(handle.HasValue, "No raids up.");
-
-            //Pass on
-            this.raid_upload_logs(ctx, (uint)handle.Value.raid_id);
+            this.raid_upload_logs_impl(ctx);
         }
 
         [Command("raid help")]

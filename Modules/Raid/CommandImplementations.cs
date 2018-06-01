@@ -425,11 +425,8 @@ namespace DiscordBot.Modules.Raid
             ctx.message.Channel.SendMessageAsync("", false, embed).GetAwaiter().GetResult();
         }
 
-        private void raid_upload_logs_impl(Context ctx, int id)
+        private void raid_upload_logs_impl(Context ctx)
         {
-            //Get a handle to the raid
-            var handle = RaidManager.GetRaidFromID(id).Value;
-
             //Determine the folder to unzip to
             var dst = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + Path.DirectorySeparatorChar);
 
