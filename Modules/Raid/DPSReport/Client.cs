@@ -16,58 +16,47 @@ namespace DiscordBot.Modules.Raid.DPSReport
         //private static readonly string GET_TOKEN_URI = @"https://dps.report/getUserToken"; //OPTIONAL, maybe in the future?
         private static readonly string UPLOAD_URI    = @"https://dps.report/uploadContent?json=1&rotation_weap1=1&generator=rh";
 
-        public static UploadResponse UploadLog(string path)
+        public static UploadResponse UploadLog(Stream stream, string name)
         {
             //Catch any errors
             return Debug.Try(() =>
             {
-                //Check if the file exists
-                Debug.Assert(File.Exists(path), $"{path} does not exist!");
+                //Use the file as our content and mark with appropriate content type
+                var file = new StreamContent(stream);
+                file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
-                //Open the file
-                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Delete, 4096, FileOptions.DeleteOnClose))
+                //Prepare our payload
+                var content = new MultipartFormDataContent();
+                content.Add(file, "file", name);
+
+                //Get an HttpClient
+                using (var http = new HttpClient())
                 {
-                    //Use the file as our content and mark with appropriate content type
-                    var file = new StreamContent(fs);
-                    file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+                    //Set a really long timeout because the server is slow.
+                    http.Timeout = TimeSpan.FromMinutes(30);
 
-                    //Prepare our payload
-                    var content = new MultipartFormDataContent();
-                    content.Add(file, "file", Path.GetFileName(path));
+                    //Prepare our container for the response
+                    string response = null;
 
-                    //Get an HttpClient
-                    using (var http = new HttpClient())
+                    //Prepare our request message
+                    var requestMessage = new HttpRequestMessage(HttpMethod.Post, UPLOAD_URI)
                     {
-                        //Set a really long timeout because the server is slow.
-                        http.Timeout = TimeSpan.FromMinutes(30);
+                        Version = HttpVersion.Version10,
+                        Content = content
+                    };
 
-                        //Prepare our container for the response
-                        string response = null;
+                    //Send our request
+                    using (var ret = http.SendAsync(requestMessage).GetAwaiter().GetResult())
+                    {
+                        //Check if it was successful
+                        ret.EnsureSuccessStatusCode();
 
-                        //Try to upload the log
-                        Utility.WithRetry(i => Debug.Try(() =>
-                        {
-                            //Prepare our request message
-                            var requestMessage = new HttpRequestMessage(HttpMethod.Post, UPLOAD_URI)
-                            {
-                                Version = HttpVersion.Version10,
-                                Content = content
-                            };
-
-                            //Send our request
-                            using (var tmp = http.SendAsync(requestMessage).GetAwaiter().GetResult())
-                            {
-                                //Check if it was successful
-                                tmp.EnsureSuccessStatusCode();
-
-                                //Assign the response
-                                response = tmp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-                            }  
-                        }, severity: LOG_LEVEL.WARNING), 3);
-
-                        //Parse JSON and return the UploadResponse object
-                        return JsonConvert.DeserializeObject<UploadResponse>(response);
+                        //Assign the response
+                        response = ret.Content.ReadAsStringAsync().GetAwaiter().GetResult();
                     }
+
+                    //Parse JSON and return the UploadResponse object
+                    return JsonConvert.DeserializeObject<UploadResponse>(response);
                 }
             }, null);
         }

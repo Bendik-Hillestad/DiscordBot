@@ -71,56 +71,56 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
             }
         }
 
-        public static Tuple<int, int> GetBossIDOrder(int bossID)
+        public static (int group, int order) GetBossIDOrder(int bossID)
         {
             switch (bossID)
             {
                 //99CM
-                case 17021:    return new Tuple<int, int>(0, 0);
-                case 17028:    return new Tuple<int, int>(0, 1);
-                case 16948:    return new Tuple<int, int>(0, 2);
+                case 17021:    return (0, 0);
+                case 17028:    return (0, 1);
+                case 16948:    return (0, 2);
 
                 //100CM
-                case 17632:    return new Tuple<int, int>(1, 0);
-                case 17949:    return new Tuple<int, int>(1, 1);
-                case 17759:    return new Tuple<int, int>(1, 2);
+                case 17632:    return (1, 0);
+                case 17949:    return (1, 1);
+                case 17759:    return (1, 2);
 
                 //Wing 1
-                case 15438:    return new Tuple<int, int>(2, 0);
-                case 15429:    return new Tuple<int, int>(2, 1);
-                case 15375:    return new Tuple<int, int>(2, 2);
+                case 15438:    return (2, 0);
+                case 15429:    return (2, 1);
+                case 15375:    return (2, 2);
 
                 //Wing 2
-                case 16123:    return new Tuple<int, int>(3, 0);
-                case 16115:    return new Tuple<int, int>(3, 1);
+                case 16123:    return (3, 0);
+                case 16115:    return (3, 1);
 
                 //Wing 3
-                case 16235:    return new Tuple<int, int>(4, 0);
+                case 16235:    return (4, 0);
                 case 16246: //FALLTHROUGH
-                case 16286:    return new Tuple<int, int>(4, 1);
+                case 16286:    return (4, 1);
 
                 //Wing 4
-                case 17194:    return new Tuple<int, int>(5, 0);
-                case 17172:    return new Tuple<int, int>(5, 1);
-                case 17188:    return new Tuple<int, int>(5, 2);
-                case 17154:    return new Tuple<int, int>(5, 3);
+                case 17194:    return (5, 0);
+                case 17172:    return (5, 1);
+                case 17188:    return (5, 2);
+                case 17154:    return (5, 3);
                 
                 //Wing 4 CM
-                case 16728874: return new Tuple<int, int>(6, 0);
-                case 16728852: return new Tuple<int, int>(6, 1);
-                case 16728868: return new Tuple<int, int>(6, 2);
-                case 16728834: return new Tuple<int, int>(6, 3);
+                case 16728874: return (6, 0);
+                case 16728852: return (6, 1);
+                case 16728868: return (6, 2);
+                case 16728834: return (6, 3);
 
                 //Wing 5
-                case 19767:    return new Tuple<int, int>(7, 0);
-                case 19450:    return new Tuple<int, int>(7, 1);
+                case 19767:    return (7, 0);
+                case 19450:    return (7, 1);
 
                 //Wing 5 CM
-                case 16731447: return new Tuple<int, int>(8, 0);
-                case 16731130: return new Tuple<int, int>(8, 1);
+                case 16731447: return (8, 0);
+                case 16731130: return (8, 1);
 
                 //Unknown
-                default: return new Tuple<int, int>(Int32.MaxValue, Int32.MaxValue);
+                default: return (Int32.MaxValue, Int32.MaxValue);
             }
         }
     }
@@ -131,59 +131,63 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
         private static readonly string LIST_ENCOUNTERS_URI = @"https://www.gw2raidar.com/api/v2/encounters?offset={0}&since={1}";
         private static readonly string LIST_AREAS_URI      = @"https://www.gw2raidar.com/api/v2/areas";
 
-        public static bool UploadLog(string path, string tag)
+        public static UploadResponse UploadLog(Stream stream, string name, string tag)
         {
             //Catch any errors
             return Debug.Try(() =>
             {
-                //Check if the file exists
-                Debug.Assert(File.Exists(path), $"{path} does not exist!");
-
                 //Get the token
                 var token = GetToken();
 
-                //Open the file
-                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Delete))
+                //Use the file as our content and mark with appropriate content type
+                var file = new StreamContent(stream);
+                file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+                //Prepare our payload
+                var content = new MultipartFormDataContent();
+                content.Add(file, "file", name);
+                content.Add(new StringContent(tag), "tags");
+
+                //Get a HttpClient
+                using (var http = new HttpClient())
                 {
-                    //Use the file as our content and mark with appropriate content type
-                    var file = new StreamContent(fs);
-                    file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+                    //Set a fairly long timeout in case of slow internet
+                    http.Timeout = TimeSpan.FromMinutes(10);
 
-                    //Prepare our payload
-                    var content = new MultipartFormDataContent();
-                    content.Add(file, "file", Path.GetFileName(path));
-                    content.Add(new StringContent(tag), "tags");
+                    //Prepare our container for the response
+                    string response = null;
 
-                    //Get a HttpClient
-                    using (var http = new HttpClient())
+                    //Prepare our request message
+                    var requestMessage = new HttpRequestMessage(HttpMethod.Put, UPLOAD_URI)
                     {
-                        //Set a fairly long timeout in case of slow internet
-                        http.Timeout = TimeSpan.FromMinutes(10);
+                        Version = HttpVersion.Version10,
+                        Content = content
+                    };
 
-                        //Prepare our request message
-                        var requestMessage = new HttpRequestMessage(HttpMethod.Put, UPLOAD_URI)
-                        {
-                            Version = HttpVersion.Version10,
-                            Content = content
-                        };
+                    //Put our token in the header
+                    http.DefaultRequestHeaders.Add("Authorization", $"Token {token}");
 
-                        //Put our token in the header
-                        http.DefaultRequestHeaders.Add("Authorization", $"Token {token}");
-
-                        //Send our file with a PUT request
-                        var ret = http.SendAsync(requestMessage).GetAwaiter().GetResult();
-
+                    //Send our file with a PUT request
+                    using (var ret = http.SendAsync(requestMessage).GetAwaiter().GetResult())
+                    {
                         //Check if it was successful
                         ret.EnsureSuccessStatusCode();
+
+                        //Assign the response
+                        response = ret.Content.ReadAsStringAsync().GetAwaiter().GetResult();
                     }
+
+                    //Parse JSON and return the UploadResponse object
+                    return JsonConvert.DeserializeObject<UploadResponse>(response);
                 }
-            });
+            }, null);
         }
 
-        public static bool FindEncounters(ref Dictionary<string, EncounterResult> bossDictionary, string tag)
+        public static bool FindEncounters(ref Dictionary<short, string> reports, string tag)
         {
-            //Make a local copy because of lambda
-            var bosses = new Dictionary<string, EncounterResult>(bossDictionary);
+            //Setup a dictionary to hold encounter results
+            var bosses = new Dictionary<string, EncounterResult>();
+            reports.Keys.ToList().ForEach(key => bosses.Add(TranslateBossID(key), null));
 
             //Catch any errors
             bool e = Debug.Try(() =>
@@ -228,8 +232,19 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
                 } while (next != null);
             });
 
+            //Go through the results
+            var tmp = new Dictionary<short, string>(reports);
+            bosses.Where(kv => kv.Value != null).ToList().ForEach(kv =>
+            {
+                //Translate the name back again to the id
+                var id = tmp.First(kv2 => string.Equals(TranslateBossID(kv2.Key), kv.Key)).Key;
+
+                //Insert the link
+                tmp[id] = @"[gw2raidar](https://www.gw2raidar.com/encounter/" + kv.Value.url_id + ")";
+            });
+
             //Store the result and return with success code
-            bossDictionary = bosses;
+            reports = tmp;
             return e;
         }
 

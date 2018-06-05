@@ -2,6 +2,12 @@
 
 namespace DiscordBot.Modules.Raid.GW2Raidar.Response
 {
+    public sealed class UploadResponse
+    {
+        public int    upload_id { get; set; }
+        public string filename  { get; set; }
+    }
+
     public sealed class EncounterResult
     {
         public string url_id      { get; set; }
