@@ -614,6 +614,10 @@ namespace DiscordBot.Modules.Raid
                 return (bossID: key, raidar: raidarResults[key], report: reportResults[key]);
             });
 
+            //Setup footer for arnoud
+            var footer = "";
+            var regex  = new Regex(@"^(?:\[.+\]\((.+)\)|(.+))$");
+
             //Go through the groups
             results.GroupBy(r => GetBossIDOrder(r.bossID).group).ToList().ForEach(g =>
             {
@@ -622,17 +626,22 @@ namespace DiscordBot.Modules.Raid
                  .ToList().ForEach(encounter =>
                 {
                     //Format the status
-                    var status = $"{encounter.raidar} · {encounter.report}";
+                    var title = TranslateBossID(encounter.bossID);
+                    var value = $"{encounter.raidar} · {encounter.report}";
+
+                    //Add to footer
+                    var m1 = regex.Match(encounter.report);
+                    var m2 = regex.Match(encounter.raidar);
+                    footer += $"{(m1.Groups[1].Value + m1.Groups[2].Value)} {(m2.Groups[1].Value + m2.Groups[2].Value)} ";
 
                     //Add the field to the embed
-                    builder.AddInlineField(TranslateBossID(encounter.bossID), status);
+                    builder = builder.AddInlineField(title, value);
                 });
             });
 
             //Build and return the embed
-            return builder.Build();
+            return builder.WithFooter(footer).Build();
         }
-
 
         private List<string> GetRoles(string roleList)
         {
