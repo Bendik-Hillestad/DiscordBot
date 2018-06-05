@@ -25,7 +25,7 @@ namespace DiscordBot.Utils
 
         public static string FormatExceptionMessage(Exception ex)
         {
-            return $"{ex.GetType().Name}\n{ex.Message}\n\t    At: {ex.TargetSite.Name}";
+            return $"{ex.GetType().Name}\n{ex.Message}\n\t    At: {ex.TargetSite?.Name}";
         }
 
         public static bool Try
@@ -45,7 +45,7 @@ namespace DiscordBot.Utils
 
                 //No errors
                 return true;
-            }, false, verbose);
+            }, false, verbose, severity, method, lineNumber);
         }
 
         public static T Try<T>
@@ -108,10 +108,13 @@ namespace DiscordBot.Utils
                     Logger.Log(severity, FormatExceptionMessage(ex), method, lineNumber);
 
                     //Check for inner exception
-                    if (ex.InnerException != null)
+                    while (ex.InnerException != null)
                     {
                         //Log inner exception
                         Logger.Log(severity, FormatExceptionMessage(ex.InnerException), method, lineNumber);
+
+                        //Unwrap the exception
+                        ex = ex.InnerException;
                     }
                 }
             }

@@ -1,14 +1,22 @@
 ﻿using System;
-using System.Linq;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 using Discord;
 using DiscordBot.Commands;
 using DiscordBot.Core;
-using DiscordBot.Raids;
+using DiscordBot.Modules.Raid.EVTC;
 using DiscordBot.Utils;
+using DiscordBot.Raids;
+
+using static DiscordBot.Modules.Raid.GW2Raidar.Utility;
 
 namespace DiscordBot.Modules.Raid
 {
@@ -421,6 +429,167 @@ namespace DiscordBot.Modules.Raid
             ctx.message.Channel.SendMessageAsync("", false, embed).GetAwaiter().GetResult();
         }
 
+        private void raid_upload_logs_impl(Context ctx)
+        {
+            //Get the attachment
+            var attachment = ctx.message.Attachments.First();
+
+            //Send status report
+            var dlStatus = ctx.message.Channel.SendMessageAsync("Downloading...");
+
+            //Download it
+            Stream file = null;
+            using (var httpClient = new HttpClient())
+            {
+                file = httpClient.GetStreamAsync(attachment.Url).GetAwaiter().GetResult();
+            }
+
+            //Update status report
+            var msg = dlStatus.GetAwaiter().GetResult();
+            var zipStatus = msg.ModifyAsync(prop =>
+            {
+                prop.Content = "Unzipping...";
+            });
+
+            //Open the zip archive and accept only the first 30 distinct streams
+            var streams = ZipHelper.GetUnzippedStreams(file)
+                                   .GroupBy(t => t.filename).Select(g => g.First())
+                                   .Take   (30).ToList();
+
+            //Close the zip archive
+            file.Close();
+     
+            //Update status report
+            zipStatus.GetAwaiter().GetResult();
+            var verifyStatus = msg.ModifyAsync(prop =>
+            {
+                prop.Content = "Verifying...";
+            });
+
+            //Check that we have some streams
+            Precondition.Assert(streams.Count > 0, "No .evtc files found in zip!");
+
+            //Get the encounter ids
+            var encounters = streams.Select(log => Debug.Try(() =>
+            {
+                //Open the log
+                using (var evtcReader = new EVTCReader(log.stream.GetStream()))
+                {
+                    //Read the header
+                    var header = evtcReader.ReadHeader();
+
+                    //Group filename and encounter id
+                    return (log.filename, id: header.encounter_id);
+                }
+            }, default, severity: LOG_LEVEL.WARNING))
+            .Where  (t => !string.IsNullOrEmpty(t.filename)) //Filter invalid logs
+            .ToList ();
+
+            //Check that we got some encounters
+            Precondition.Assert(encounters.Count > 0, "No valid .evtc files found in zip!");
+
+            //Join the encounter ids with the streams
+            var data = encounters.Join(streams, outer => outer.filename, inner => inner.filename, (outer, inner) =>
+            {
+                return (outer.id, outer.filename, inner.stream);
+            })
+            .GroupBy(tuple => tuple.id).Select(g => g.First()) //Get unique encounters
+            .ToList ();
+
+            //Update status report
+            verifyStatus.GetAwaiter().GetResult();
+            var uploadStatus = msg.ModifyAsync(prop =>
+            {
+                prop.Content = "Uploading...";
+            });
+
+            //Run the next part concurrently so we don't block the bot itself
+            Task.Run(() =>
+            {
+                //Generate a unique tag for these logs
+                var tag = Convert.ToBase64String
+                (
+                    SHA256.Create().ComputeHash
+                    (
+                        Encoding.UTF8.GetBytes($"{ctx.message.Author.Mention} - {DateTimeOffset.UtcNow.Ticks}")
+                    )
+                );
+
+                //Asynchronously upload the logs
+                var raidarTasks = new List<Task<short>>();
+                var reportTasks = new List<Task<DPSReport.Response.UploadResponse>>();
+                data.ForEach(t =>
+                {
+                    //Add GW2Raidar upload task
+                    raidarTasks.Add(Task.Run(() => (GW2Raidar.Client.UploadLog(t.stream.GetStream(), t.filename, tag), t.id).id));
+
+                    //Add dps.report upload task
+                    reportTasks.Add(Task.Run(() => DPSReport.Client.UploadLog(t.stream.GetStream(), t.filename)));
+                });
+
+                //Setup the initial state for our uploads
+                var raidarResults = new Dictionary<short, string>();
+                var reportResults = new Dictionary<short, string>();
+                data.ForEach(t =>
+                {
+                    raidarResults.Add(t.id, "Uploading");
+                    reportResults.Add(t.id, "Uploading");
+                });
+
+                //Update status report
+                uploadStatus.GetAwaiter().GetResult();
+                var uploadStatus2 = msg.ModifyAsync(prop =>
+                {
+                    prop.Content = "";
+                    prop.Embed   = CreateLogEmbed(raidarResults, reportResults);
+                });
+
+                //Wait a few seconds before we start polling
+                Task.Delay(5 * 1000).GetAwaiter().GetResult();
+
+                //Now we just keep polling the services
+                for (int repeat = 0; repeat < 40; repeat++)
+                {
+                    //Check dps.report tasks for results
+                    var done = reportTasks.Where (t => t.IsCompletedSuccessfully)
+                                          .Where (t => t.Result != null)
+                                          .Select(t => (t.Result.metadata.evtc.bossId, t.Result.permalink));
+
+                    //Update report results
+                    done.ToList().ForEach(r => reportResults[(short)r.bossId] = $"[dps.report]({r.permalink})");
+
+                    //Check gw2raidar tasks for upload status
+                    var done2 = raidarTasks.Where (t => t.IsCompletedSuccessfully)
+                                           .Where (t => t.Result != 0)
+                                           .Select(t => (id: t.Result, status: "Processing"));
+
+                    //Update raidar results
+                    done2.ToList().ForEach(r => raidarResults[r.id] = r.status);
+
+                    //Poll gw2raidar for results
+                    GW2Raidar.Client.FindEncounters(ref raidarResults, tag);
+
+                    //Update message
+                    uploadStatus2.GetAwaiter().GetResult();
+                    uploadStatus2 = msg.ModifyAsync(prop =>
+                    {
+                        prop.Content = "";
+                        prop.Embed   = CreateLogEmbed(raidarResults, reportResults);
+                    });
+
+                    //Check if we have everything
+                    var raidarDone = (raidarResults.Count(kv => !kv.Value.StartsWith('[')) == 0);
+                    var reportDone = (reportResults.Count(kv => !kv.Value.StartsWith('[')) == 0);
+
+                    //Break if we're done
+                    if (raidarDone && reportDone) break;
+
+                    //Wait half a minute
+                    Task.Delay(30 * 1000).GetAwaiter().GetResult();
+                }
+            });
+        }
+
         private void raid_help_impl(Context ctx)
         {
             //Get all the commands and format them nicely
@@ -432,6 +601,46 @@ namespace DiscordBot.Modules.Raid
                    "Commands:",
                    string.Join("\n", commands)
                );
+        }
+
+        private static Embed CreateLogEmbed(Dictionary<short, string> raidarResults, Dictionary<short, string> reportResults)
+        {
+            //Setup the embed builder
+            var builder = new EmbedBuilder().WithColor(Color.Blue);
+
+            //Extract the results
+            var results = raidarResults.Keys.Select(key =>
+            {
+                return (bossID: key, raidar: raidarResults[key], report: reportResults[key]);
+            });
+
+            //Setup footer for arnoud
+            var footer = "";
+            var regex  = new Regex(@"^(?:\[.+\]\((.+)\)|(.+))$");
+
+            //Go through the groups
+            results.GroupBy(r => GetBossIDOrder(r.bossID).group).ToList().ForEach(g =>
+            {
+                //Iterate through the encounters in the proper order
+                g.OrderBy(e => GetBossIDOrder(e.bossID).order)
+                 .ToList().ForEach(encounter =>
+                {
+                    //Format the status
+                    var title = TranslateBossID(encounter.bossID);
+                    var value = $"{encounter.raidar} · {encounter.report}";
+
+                    //Add to footer
+                    var m1 = regex.Match(encounter.report);
+                    var m2 = regex.Match(encounter.raidar);
+                    footer += $"{(m1.Groups[1].Value + m1.Groups[2].Value)} {(m2.Groups[1].Value + m2.Groups[2].Value)} ";
+
+                    //Add the field to the embed
+                    builder = builder.AddInlineField(title, value);
+                });
+            });
+
+            //Build and return the embed
+            return builder.WithFooter(footer).Build();
         }
 
         private List<string> GetRoles(string roleList)
