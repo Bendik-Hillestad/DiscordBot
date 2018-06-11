@@ -496,97 +496,68 @@ namespace DiscordBot.Modules.Raid
             .GroupBy(tuple => tuple.id).Select(g => g.First()) //Get unique encounters
             .ToList ();
 
-            //Update status report
-            verifyStatus.GetAwaiter().GetResult();
-            var uploadStatus = msg.ModifyAsync(prop =>
-            {
-                prop.Content = "Uploading...";
-            });
-
             //Run the next part concurrently so we don't block the bot itself
             Task.Run(() =>
             {
-                //Generate a unique tag for these logs
-                var tag = Convert.ToBase64String
-                (
-                    SHA256.Create().ComputeHash
-                    (
-                        Encoding.UTF8.GetBytes($"{ctx.message.Author.Mention} - {DateTimeOffset.UtcNow.Ticks}")
-                    )
-                );
-
-                //Asynchronously upload the logs
-                var raidarTasks = new List<Task<short>>();
-                var reportTasks = new List<Task<DPSReport.Response.UploadResponse>>();
-                data.ForEach(t =>
+                //Setup dictionaries to contain results
+                var report = new Dictionary<short, string>();
+                var raidar = new Dictionary<short, string>();
+                data.ForEach(d =>
                 {
-                    //Add GW2Raidar upload task
-                    raidarTasks.Add(Task.Run(() => (GW2Raidar.Client.UploadLog(t.stream.GetStream(), t.filename, tag), t.id).id));
-
-                    //Add dps.report upload task
-                    reportTasks.Add(Task.Run(() => DPSReport.Client.UploadLog(t.stream.GetStream(), t.filename)));
-                });
-
-                //Setup the initial state for our uploads
-                var raidarResults = new Dictionary<short, string>();
-                var reportResults = new Dictionary<short, string>();
-                data.ForEach(t =>
-                {
-                    raidarResults.Add(t.id, "Uploading");
-                    reportResults.Add(t.id, "Uploading");
+                    report.Add(d.id, "Uploading");
+                    raidar.Add(d.id, "Uploading");
                 });
 
                 //Update status report
-                uploadStatus.GetAwaiter().GetResult();
-                var uploadStatus2 = msg.ModifyAsync(prop =>
+                verifyStatus.GetAwaiter().GetResult();
+                var uploadStatus = msg.ModifyAsync(prop =>
                 {
                     prop.Content = "";
-                    prop.Embed   = CreateLogEmbed(raidarResults, reportResults);
+                    prop.Embed   = CreateLogEmbed(raidar, report);
                 });
 
-                //Wait a few seconds before we start polling
-                Task.Delay(5 * 1000).GetAwaiter().GetResult();
+                //Setup uploader
+                var uploader = new LogUploader();
+                uploader.RegisterUploader(typeof(DPSReport.ReportUploadManager));
+                uploader.RegisterUploader(typeof(GW2Raidar.RaidarUploadManager));
 
-                //Now we just keep polling the services
-                for (int repeat = 0; repeat < 40; repeat++)
+                //Listen to events
+                var obj = new object();
+                uploader.UploadStatusChanged += (o, e) =>
                 {
-                    //Check dps.report tasks for results
-                    var done = reportTasks.Where (t => t.IsCompletedSuccessfully)
-                                          .Where (t => t.Result != null)
-                                          .Select(t => (t.Result.metadata.evtc.bossId, t.Result.permalink));
-
-                    //Update report results
-                    done.ToList().ForEach(r => reportResults[(short)r.bossId] = $"[dps.report]({r.permalink})");
-
-                    //Check gw2raidar tasks for upload status
-                    var done2 = raidarTasks.Where (t => t.IsCompletedSuccessfully)
-                                           .Where (t => t.Result != 0)
-                                           .Select(t => (id: t.Result, status: "Processing"));
-
-                    //Update raidar results
-                    done2.ToList().ForEach(r => raidarResults[r.id] = r.status);
-
-                    //Poll gw2raidar for results
-                    GW2Raidar.Client.FindEncounters(ref raidarResults, tag);
-
-                    //Update message
-                    uploadStatus2.GetAwaiter().GetResult();
-                    uploadStatus2 = msg.ModifyAsync(prop =>
+                    //Lazy solution
+                    lock (obj)
                     {
-                        prop.Content = "";
-                        prop.Embed   = CreateLogEmbed(raidarResults, reportResults);
-                    });
+                        //Check if it's done
+                        var done = (e.UploadStatus == UploadManager.LogUploadStatus.Succeeded);
 
-                    //Check if we have everything
-                    var raidarDone = (raidarResults.Count(kv => !kv.Value.StartsWith('[')) == 0);
-                    var reportDone = (reportResults.Count(kv => !kv.Value.StartsWith('[')) == 0);
+                        //Determine the text to write
+                        var text = (done ? $"[{e.HostName}]({e.URL})" : e.UploadStatus.ToString());
 
-                    //Break if we're done
-                    if (raidarDone && reportDone) break;
+                        //Select the right dictionary to insert into
+                        switch (e.HostName)
+                        {
+                            case "dps.report": report[(short)e.UniqueID] = text; break;
+                            case "GW2Raidar":  raidar[(short)e.UniqueID] = text; break;
+                        }
 
-                    //Wait half a minute
-                    Task.Delay(30 * 1000).GetAwaiter().GetResult();
-                }
+                        //Wait for discord
+                        uploadStatus.GetAwaiter().GetResult();
+
+                        //Update
+                        uploadStatus = msg.ModifyAsync(prop =>
+                        {
+                            prop.Content = "";
+                            prop.Embed   = CreateLogEmbed(raidar, report);
+                        });
+                    }
+                };
+
+                //Add items to upload
+                data.ForEach(d => uploader.AddItem(d.stream, d.filename, d.id));
+
+                //Upload the logs
+                uploader.Start();
             });
         }
 
