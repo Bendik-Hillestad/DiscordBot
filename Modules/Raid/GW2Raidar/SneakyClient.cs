@@ -184,7 +184,6 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
 
                         //Save the response
                         response = ret.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-                        Console.WriteLine(response);
                     }
 
                     //Parse JSON and return the UploadResponse object
@@ -239,7 +238,6 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
 
                         //Save the response
                         response = ret.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-                        Console.WriteLine(response);
                     }
 
                     //Parse JSON as a PollResponse object
