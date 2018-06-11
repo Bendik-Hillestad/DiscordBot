@@ -590,7 +590,8 @@ namespace DiscordBot.Modules.Raid
             var regex  = new Regex(@"^(?:\[.+\]\((.+)\)|(.+))$");
 
             //Go through the groups
-            results.GroupBy(r => GetBossIDOrder(r.bossID).group).ToList().ForEach(g =>
+            results.GroupBy(r => GetBossIDOrder(r.bossID).group)
+                   .OrderBy(g => g.Key).ToList().ForEach(g =>
             {
                 //Iterate through the encounters in the proper order
                 g.OrderBy(e => GetBossIDOrder(e.bossID).order)
