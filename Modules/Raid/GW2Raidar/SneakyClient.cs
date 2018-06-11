@@ -51,6 +51,9 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
             //Catch any errors
             return Debug.Try<Credentials?>(() =>
             {
+                //Ensure we have the login credentials
+                Debug.Assert(BotConfig.Config.ContainsKey("raidar_credentials"), "Missing gw2raidar credentials!");
+
                 //Get a HttpClient
                 using (var http = new HttpClient())
                 {
