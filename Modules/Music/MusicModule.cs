@@ -33,9 +33,9 @@ namespace DiscordBot.Modules.Music
 
             //Make local copies of the config values we care about
             var bot = Bot.GetBotInstance();
-            this.youtubeAPIKey       = BotConfig.Config.youtube_api_key;
-            this.spotifyClientID     = BotConfig.Config.spotify_client_id;
-            this.spotifyClientSecret = BotConfig.Config.spotify_client_secret;
+            this.youtubeAPIKey       = (string)BotConfig.Config["youtube_api_key"];
+            this.spotifyClientID     = (string)BotConfig.Config["spotify_client_id"];
+            this.spotifyClientSecret = (string)BotConfig.Config["spotify_client_secret"];
 
             //Set the default volume to 30 (TODO: Remove this later? Users should honestly adjust the volume locally)
             this.volume              = 30;
@@ -81,19 +81,22 @@ namespace DiscordBot.Modules.Music
         [Command("music skip")]
         public void music_skip(Context ctx)
         {
-            Precondition.Assert(false, "Not implemented yet.");
+            //Pass on to implementation
+            this.music_skip_impl(ctx);
         }
 
         [Command("music queue")]
         public void music_queue(Context ctx)
         {
-            Precondition.Assert(false, "Not implemented yet.");
+            //Pass on to implementation
+            this.music_queue_impl(ctx);
         }
 
         [Command("music np")]
         public void music_np(Context ctx)
         {
-            Precondition.Assert(false, "Not implemented yet.");
+            //Pass on to implementation
+            this.music_np_impl(ctx);
         }
 
         public override string HelpMessage(Context ctx)

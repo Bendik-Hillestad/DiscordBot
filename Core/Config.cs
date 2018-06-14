@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Text;
+using System.Collections;
 
 using DiscordBot.Utils;
 
@@ -7,21 +8,11 @@ using Newtonsoft.Json;
 
 namespace DiscordBot.Core
 {
-    public class BotConfig
+    public static class BotConfig
     {
-        //TODO: Make set private again somehow (JsonConvert fails atm with private set)
-        public string discord_bot_token     { get; set; }
-        public ulong  discord_owner_id      { get; set; }
-        public string spotify_client_id     { get; set; }
-        public string spotify_client_secret { get; set; }
-        public string youtube_api_key       { get; set; }
+        public static Hashtable Config { get; } = ReadConfig();
 
-        public static BotConfig Config { get; } = ReadConfig();
-
-        private BotConfig()
-        {}
-
-        private static BotConfig ReadConfig()
+        private static Hashtable ReadConfig()
         {
             //Catch any errors
             return Debug.Try(() =>
@@ -33,7 +24,7 @@ namespace DiscordBot.Core
                     StreamReader sr = new StreamReader(fs, Encoding.UTF8);
 
                     //Deserialise the JSON and return the configuration
-                    return JsonConvert.DeserializeObject<BotConfig>(sr.ReadToEnd());
+                    return JsonConvert.DeserializeObject<Hashtable>(sr.ReadToEnd());
                 }
             }, null);
         }

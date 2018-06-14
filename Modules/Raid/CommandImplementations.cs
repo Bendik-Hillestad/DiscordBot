@@ -1,14 +1,22 @@
 ﻿using System;
-using System.Linq;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 using Discord;
 using DiscordBot.Commands;
 using DiscordBot.Core;
-using DiscordBot.Raids;
+using DiscordBot.Modules.Raid.EVTC;
 using DiscordBot.Utils;
+using DiscordBot.Raids;
+
+using static DiscordBot.Modules.Raid.GW2Raidar.Utility;
 
 namespace DiscordBot.Modules.Raid
 {
@@ -421,6 +429,138 @@ namespace DiscordBot.Modules.Raid
             ctx.message.Channel.SendMessageAsync("", false, embed).GetAwaiter().GetResult();
         }
 
+        private void raid_upload_logs_impl(Context ctx)
+        {
+            //Get the attachment
+            var attachment = ctx.message.Attachments.First();
+
+            //Send status report
+            var dlStatus = ctx.message.Channel.SendMessageAsync("Downloading...");
+
+            //Download it
+            Stream file = null;
+            using (var httpClient = new HttpClient())
+            {
+                file = httpClient.GetStreamAsync(attachment.Url).GetAwaiter().GetResult();
+            }
+
+            //Update status report
+            var msg = dlStatus.GetAwaiter().GetResult();
+            var zipStatus = msg.ModifyAsync(prop =>
+            {
+                prop.Content = "Unzipping...";
+            });
+
+            //Open the zip archive and accept only the first 30 distinct streams
+            var streams = ZipHelper.GetUnzippedStreams(file)
+                                   .GroupBy(t => t.filename).Select(g => g.First())
+                                   .Take   (30).ToList();
+
+            //Close the zip archive
+            file.Close();
+     
+            //Update status report
+            zipStatus.GetAwaiter().GetResult();
+            var verifyStatus = msg.ModifyAsync(prop =>
+            {
+                prop.Content = "Verifying...";
+            });
+
+            //Check that we have some streams
+            Precondition.Assert(streams.Count > 0, "No .evtc files found in zip!");
+
+            //Get the encounter ids
+            var encounters = streams.Select(log => Debug.Try(() =>
+            {
+                //Open the log
+                using (var evtcReader = new EVTCReader(log.stream.GetStream()))
+                {
+                    //Read the header
+                    var header = evtcReader.ReadHeader();
+
+                    //Group filename and encounter id
+                    return (log.filename, id: header.encounter_id);
+                }
+            }, default, severity: LOG_LEVEL.WARNING))
+            .Where  (t => !string.IsNullOrEmpty(t.filename)) //Filter invalid logs
+            .ToList ();
+
+            //Check that we got some encounters
+            Precondition.Assert(encounters.Count > 0, "No valid .evtc files found in zip!");
+
+            //Join the encounter ids with the streams
+            var data = encounters.Join(streams, outer => outer.filename, inner => inner.filename, (outer, inner) =>
+            {
+                return (outer.id, outer.filename, inner.stream);
+            })
+            .GroupBy(tuple => tuple.id).Select(g => g.First()) //Get unique encounters
+            .ToList ();
+
+            //Run the next part concurrently so we don't block the bot itself
+            Task.Run(() =>
+            {
+                //Setup dictionaries to contain results
+                var report = new Dictionary<short, string>();
+                var raidar = new Dictionary<short, string>();
+                data.ForEach(d =>
+                {
+                    report.Add(d.id, "Uploading");
+                    raidar.Add(d.id, "Uploading");
+                });
+
+                //Update status report
+                verifyStatus.GetAwaiter().GetResult();
+                var uploadStatus = msg.ModifyAsync(prop =>
+                {
+                    prop.Content = "";
+                    prop.Embed   = CreateLogEmbed(raidar, report);
+                });
+
+                //Setup uploader
+                var uploader = new LogUploader();
+                uploader.RegisterUploader(typeof(DPSReport.ReportUploadManager));
+                uploader.RegisterUploader(typeof(GW2Raidar.RaidarUploadManager));
+
+                //Listen to events
+                var obj = new object();
+                uploader.UploadStatusChanged += (o, e) =>
+                {
+                    //Lazy solution
+                    lock (obj)
+                    {
+                        //Check if it's done
+                        var done = (e.UploadStatus == UploadManager.LogUploadStatus.Succeeded);
+
+                        //Determine the text to write
+                        var text = (done ? $"[{e.HostName}]({e.URL})" : e.UploadStatus.ToString());
+
+                        //Select the right dictionary to insert into
+                        switch (e.HostName)
+                        {
+                            case "dps.report": report[(short)e.UniqueID] = text; break;
+                            case "GW2Raidar":  raidar[(short)e.UniqueID] = text; break;
+                        }
+
+                        //Wait for discord
+                        uploadStatus.GetAwaiter().GetResult();
+
+                        //Update
+                        uploadStatus = msg.ModifyAsync(prop =>
+                        {
+                            prop.Content = "";
+                            prop.Embed   = CreateLogEmbed(raidar, report);
+                        });
+                    }
+                };
+
+                //Add items to upload
+                data.ForEach(d => uploader.AddItem(d.stream, d.filename, d.id));
+
+                //Upload the logs
+                uploader.Start();
+            });
+        }
+
         private void raid_help_impl(Context ctx)
         {
             //Get all the commands and format them nicely
@@ -432,6 +572,47 @@ namespace DiscordBot.Modules.Raid
                    "Commands:",
                    string.Join("\n", commands)
                );
+        }
+
+        private static Embed CreateLogEmbed(Dictionary<short, string> raidarResults, Dictionary<short, string> reportResults)
+        {
+            //Setup the embed builder
+            var builder = new EmbedBuilder().WithColor(Color.Blue);
+
+            //Extract the results
+            var results = raidarResults.Keys.Select(key =>
+            {
+                return (bossID: key, raidar: raidarResults[key], report: reportResults[key]);
+            });
+
+            //Setup footer for arnoud
+            var footer = "";
+            var regex  = new Regex(@"^(?:\[.+\]\((.+)\)|(.+))$");
+
+            //Go through the groups
+            results.GroupBy(r => GetBossIDOrder(r.bossID).group)
+                   .OrderBy(g => g.Key).ToList().ForEach(g =>
+            {
+                //Iterate through the encounters in the proper order
+                g.OrderBy(e => GetBossIDOrder(e.bossID).order)
+                 .ToList().ForEach(encounter =>
+                {
+                    //Format the status
+                    var title = TranslateBossID(encounter.bossID);
+                    var value = $"{encounter.raidar} · {encounter.report}";
+
+                    //Add to footer
+                    var m1 = regex.Match(encounter.report);
+                    var m2 = regex.Match(encounter.raidar);
+                    footer += $"{(m1.Groups[1].Value + m1.Groups[2].Value)} {(m2.Groups[1].Value + m2.Groups[2].Value)} ";
+
+                    //Add the field to the embed
+                    builder = builder.AddInlineField(title, value);
+                });
+            });
+
+            //Build and return the embed
+            return builder.WithFooter(footer).Build();
         }
 
         private List<string> GetRoles(string roleList)

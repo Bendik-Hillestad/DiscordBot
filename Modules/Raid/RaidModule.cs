@@ -14,10 +14,6 @@ namespace DiscordBot.Modules.Raid
     {
         public override string ModuleName => nameof(RaidModule);
 
-        //TODO: Raid complete stuff, gw2raidheroes? GitHub page etc?
-        //Upload logs to bot, store in raids/{id} folder?
-        //raid complete {id} {hh}:{mm} {notes}
-
         public override void OnInit()
         {
             //Initialise the raid manager
@@ -380,6 +376,22 @@ namespace DiscordBot.Modules.Raid
         {
             //Pass on to implementation
             this.raid_show_comps_impl(ctx);
+        }
+
+        [Command("raid upload logs")]
+        public void raid_upload_logs(Context ctx)
+        {
+            //Check that we got an attachment
+            Precondition.Assert(ctx.message.Attachments.Count > 0, "Missing attachment!");
+
+            //Get the attachment
+            var attachment = ctx.message.Attachments.First();
+
+            //Check that it's a zip file
+            Precondition.Assert(attachment.Filename.EndsWith(".zip"), "Only .zip files are accepted!");
+
+            //Pass on to the implementation
+            this.raid_upload_logs_impl(ctx);
         }
 
         [Command("raid help")]
