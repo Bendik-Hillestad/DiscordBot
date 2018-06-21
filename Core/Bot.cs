@@ -137,6 +137,69 @@ namespace DiscordBot.Core
                 return Task.CompletedTask;
             };
 
+            //Capture Discord.NET failing to reconnect
+            this.cts = new CancellationTokenSource();
+            this.client.Connected += () =>
+            {
+                //Cancel any reconnects
+                this.cts.Cancel();
+                this.cts = new CancellationTokenSource();
+
+                //Done
+                return Task.CompletedTask;
+            };
+            this.client.Disconnected += ex =>
+            {
+                //Allow 30 seconds before we get suspicious
+                _ = Task.Delay(TimeSpan.FromSeconds(30), this.cts.Token).ContinueWith(_ =>
+                {
+                    //Check the connection state
+                    if (this.client.ConnectionState == ConnectionState.Connected) return;
+
+                    //Log the issue
+                    Logger.Log(LOG_LEVEL.ERROR, "Failed to reconnect within 30 seconds. Resetting...");
+
+                    //Attempt to reset, giving us 30 seconds to reconnect
+                    var timeout = Task.Delay(TimeSpan.FromSeconds(30));
+                    var connect = this.client.StartAsync();
+                    var task    = Task.WhenAny(timeout, connect).GetAwaiter().GetResult();
+
+                    //Check if it was successful
+                    if (task == connect && connect.IsCompletedSuccessfully)
+                    {
+                        //Log that we're fine
+                        Logger.Log(LOG_LEVEL.INFO, "Successfully reconnected!");
+                    }
+                    else
+                    {
+                        //Check if we timed out
+                        if (task == timeout)
+                        {
+                            //Log the error
+                            Logger.Log(LOG_LEVEL.ERROR, "Failed to reset within 30 seconds. Killing process...");
+                        }
+                        //Check if it failed to reconnect
+                        else if (connect.IsFaulted)
+                        {
+                            //Log the error
+                            Logger.Log(LOG_LEVEL.ERROR, "Reset faulted. Killing process...");
+                        }
+                        //Something else
+                        else
+                        {
+                            //Log the error
+                            Logger.Log(LOG_LEVEL.ERROR, "Unknown issue. Killing process...");
+                        }
+
+                        //Kill the process fast
+                        Environment.Exit(1);
+                    }
+                });
+
+                //Done
+                return Task.CompletedTask;
+            };
+
             //Add message handler
             this.client.MessageReceived += this.Process;
 
@@ -287,6 +350,8 @@ namespace DiscordBot.Core
         private Queue<SocketUserMessage>   messageQueue;
         private ulong                      ownerID;
         private SocketGuild                context;
+
+        private CancellationTokenSource    cts;
 
         private readonly object            messageLock      = new object();
         private readonly Semaphore         messageSemaphore = new Semaphore(0, int.MaxValue);
