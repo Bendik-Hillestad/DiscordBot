@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -9,8 +10,8 @@ using Discord;
 using Discord.Audio;
 using DiscordBot.Commands;
 using DiscordBot.Core;
+using DiscordBot.Modules.Music.YT;
 using DiscordBot.Utils;
-using DiscordBot.YT;
 
 namespace DiscordBot.Modules.Music
 {
@@ -41,14 +42,12 @@ namespace DiscordBot.Modules.Music
             this.volume              = 30;
 
             //Initialise our other fields to defaults
+            this.musicQueue          = new ConcurrentQueue<VideoInfo>();
             this.audioStreamer       = null;
             this.audioClient         = null;
             this.audioChannel        = null;
             this.audioOutStream      = null;
-            this.source              = null;
             this.skip                = false;
-            this.songQueue           = new Queue<Song>();
-            this.downloadQueue       = new Queue<VideoInfo>();
         }
 
         [Command("music join")]
@@ -104,23 +103,18 @@ namespace DiscordBot.Modules.Music
             throw new NotImplementedException();
         }
 
-        private string           youtubeAPIKey;
-        private string           spotifyClientID;
-        private string           spotifyClientSecret;
-        private Task             audioStreamer;
-        private Task             audioDownloader;
-        private IVoiceChannel    audioChannel;
-        private IAudioClient     audioClient;
-        private AudioOutStream   audioOutStream;
-        private bool             skip;
-        private int              volume;
-        private Song?            source;
-        private Queue<Song>      songQueue;
-        private Queue<VideoInfo> downloadQueue;
-        private IPlaylist        defaultPlaylist;
-
-        private readonly Semaphore downloadSemaphore = new Semaphore(0, 1);
-        private readonly object    songQueueLock     = new object();
-        private readonly object    downloadQueueLock = new object();
+        private string                     youtubeAPIKey;
+        private string                     spotifyClientID;
+        private string                     spotifyClientSecret;
+        private Task                       audioStreamer;
+        private IVoiceChannel              audioChannel;
+        private IAudioClient               audioClient;
+        private AudioOutStream             audioOutStream;
+        private bool                       skip;
+        private int                        volume;
+        private ConcurrentQueue<VideoInfo> musicQueue;
+        private YoutubeStream              current;
+        private YoutubeStream              next;
+        //private IPlaylist                  defaultPlaylist;
     }
 }

@@ -2,7 +2,7 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 
-namespace DiscordBot.Music
+namespace DiscordBot.Modules.Music.Utility
 {
     [StructLayout(LayoutKind.Explicit)]
     public struct Samples

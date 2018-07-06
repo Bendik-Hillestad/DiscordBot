@@ -1,4 +1,4 @@
-﻿namespace DiscordBot.YT
+﻿namespace DiscordBot.Modules.Music.YT
 {
     public sealed class Response
     {
