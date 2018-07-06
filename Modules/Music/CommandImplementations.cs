@@ -360,6 +360,9 @@ namespace DiscordBot.Modules.Music
                         //Check if a skip is requested
                         if (this.skip)
                         {
+                            //Unset the flag
+                            this.skip = false;
+
                             //Check if we need to cancel the buffering
                             if (this.current.IsBuffered)
                             {
