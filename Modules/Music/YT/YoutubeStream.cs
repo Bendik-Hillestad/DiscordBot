@@ -119,7 +119,7 @@ namespace DiscordBot.Modules.Music.YT
             var ytdl = Process.Start(new ProcessStartInfo
             {
                 FileName  = $"youtube-dl",
-                Arguments = $"-f 251/bestaudio -g {id}",
+                Arguments = $"-f 251/bestaudio --prefer-insecure -g {id}",
                 UseShellExecute        = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError  = true

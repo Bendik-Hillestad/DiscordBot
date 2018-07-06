@@ -79,7 +79,7 @@ namespace DiscordBot.Modules.Music.YT
                 var ytdl = Process.Start(new ProcessStartInfo
                 {
                     FileName               = $"youtube-dl",
-                    Arguments              = $"-e --get-thumbnail --get-duration {id}",
+                    Arguments              = $"--prefer-insecure -e --get-thumbnail --get-duration {id}",
                     UseShellExecute        = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError  = true

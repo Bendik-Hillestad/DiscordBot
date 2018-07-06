@@ -38,8 +38,8 @@ namespace DiscordBot.Modules.Music
             this.spotifyClientID     = (string)BotConfig.Config["spotify_client_id"];
             this.spotifyClientSecret = (string)BotConfig.Config["spotify_client_secret"];
 
-            //Set the default volume to 30 (TODO: Remove this later? Users should honestly adjust the volume locally)
-            this.volume              = 30;
+            //Set the output volume to 50
+            this.volume              = 50;
 
             //Initialise our other fields to defaults
             this.musicQueue          = new ConcurrentQueue<VideoInfo>();

@@ -137,29 +137,35 @@ namespace DiscordBot.Modules.Music
                 }
             }
 
-            //Get video info
-            var videoInfo = YouTube.GetVideoInfo(id);
+            //Try to get video info
+            var tmp = YouTube.GetVideoInfo(id);
 
             //Check that it's not null
-            Debug.Assert(videoInfo != null, "Video info is null.");
+            Debug.Assert(tmp != null, "Video info is null.");
+
+            //Get the value
+            var videoInfo = tmp.Value;
 
             //Calculate duration
-            int dur = Regex.Match(videoInfo.Value.length, @"^(\d+)(?:\:(\d+))?(?:\:(\d+))?$").Groups
+            int dur = Regex.Match(videoInfo.length, @"^(\d+)(?:\:(\d+))?(?:\:(\d+))?$").Groups
                            .Select(g => g?.Value).Where(s => !string.IsNullOrWhiteSpace(s))
                            .Skip  (1).Reverse()
                            .Select((s, i) => int.Parse(s) * (int)(Math.Pow(60, i) + 0.5))
                            .Sum   ();
 
             //Check that it's not too long
-            if (dur < 600)
+            if (dur < 36000)
             {
+                //Store the duration
+                videoInfo.length = dur.ToString();
+
                 //Queue the music
-                this.musicQueue.Enqueue(videoInfo.Value);
+                this.musicQueue.Enqueue(videoInfo);
 
                 //Build the response
                 var response = new EmbedBuilder().WithColor(Color.Blue)
-                                                 .WithThumbnailUrl(videoInfo.Value.thumb)
-                                                 .AddField("Success", $"{videoInfo.Value.name} [{videoInfo.Value.length}] was added to the queue.")
+                                                 .WithThumbnailUrl(videoInfo.thumb)
+                                                 .AddField("Success", $"{videoInfo.name} [{videoInfo.length}] was added to the queue.")
                                                  .Build();
 
                 //Send the response
@@ -170,7 +176,7 @@ namespace DiscordBot.Modules.Music
                 //Return video too long error
                 Bot.GetBotInstance().SendErrorMessage(ctx.message.Channel,
                     "Error",
-                    $"{videoInfo.Value.name} [{videoInfo.Value.length}] could not be added.\nIt's too long."
+                    $"{videoInfo.name} [{videoInfo.length}] could not be added.\nIt's too long."
                 ); return;
             }
         }
@@ -309,14 +315,14 @@ namespace DiscordBot.Modules.Music
             {
                 //Setup block size
                 const int blockSize = 3840;
-                var samples = new Samples { raw = new byte[blockSize] };
-                var span    = new Span<byte>(samples.raw);
+                Span<byte> buf = stackalloc byte[blockSize];
 
                 //Loop forever
                 while (true)
                 {
                     //Grab the next music to play
                     this.current = this.next;
+                    this.next    = null;
 
                     //Check if need to pop something from the queue
                     if (this.current == null)
@@ -339,12 +345,19 @@ namespace DiscordBot.Modules.Music
                         //Check if the queue has something
                         if (!this.musicQueue.IsEmpty)
                         {
-                            //Pop a value from the queue
+                            //Peek at the front of the queue
                             VideoInfo tmp;
-                            while (!this.musicQueue.TryDequeue(out tmp)) ;
+                            while (!this.musicQueue.TryPeek(out tmp));
 
-                            //Generate a stream from it
-                            this.next = YoutubeStream.CreateBuffered(tmp.id, tmp.name);
+                            //Check that it's not too long, we don't want to buffer long videos
+                            if (int.Parse(tmp.length) < 1000)
+                            {
+                                //Pop it from the queue
+                                while (!this.musicQueue.TryDequeue(out tmp));
+
+                                //Generate a stream from it
+                                this.next = YoutubeStream.CreateBuffered(tmp.id, tmp.name);
+                            }
                         }
                     }
                     else
@@ -381,7 +394,7 @@ namespace DiscordBot.Modules.Music
                         while (!connected) Task.Delay(1000).GetAwaiter().GetResult();
 
                         //Grab a block of samples
-                        var count = this.current.ReadBlock(span);
+                        var count = this.current.ReadBlock(buf);
 
                         //Stop playing if we're done
                         if (count == 0)
@@ -391,10 +404,10 @@ namespace DiscordBot.Modules.Music
                         }
 
                         //Change the volume
-                        Audio.AdjustVolume(ref samples, this.volume);
+                        //Audio.AdjustVolume(ref samples, this.volume);
 
                         //Send data
-                        try   { this.audioOutStream.Write(samples.raw, 0, count); }
+                        try   { this.audioOutStream.Write(buf.Slice(0, count)); }
                         catch {}
                     }
                 }
