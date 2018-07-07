@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -157,6 +158,7 @@ namespace DiscordBot.Modules.Music
             if (dur < 36000)
             {
                 //Store the duration
+                var old = videoInfo.length;
                 videoInfo.length = dur.ToString();
 
                 //Queue the music
@@ -165,7 +167,7 @@ namespace DiscordBot.Modules.Music
                 //Build the response
                 var response = new EmbedBuilder().WithColor(Color.Blue)
                                                  .WithThumbnailUrl(videoInfo.thumb)
-                                                 .AddField("Success", $"{videoInfo.name} [{videoInfo.length}] was added to the queue.")
+                                                 .AddField("Success", $"{videoInfo.name} [{old}] was added to the queue.")
                                                  .Build();
 
                 //Send the response
@@ -205,13 +207,15 @@ namespace DiscordBot.Modules.Music
             if (this.musicQueue.Count > 0)
             {
                 //Grab the names
-                var queue = this.musicQueue.Select((m, i) => ((i == 0) ? "--> " : "    ") + m.name)
-                                .Aggregate((m1, m2) => $"{m1}\n{m2}");
+                var tmpList = new List<string>();
+                if (this.current != null) tmpList.Add(this.current.Name);
+                if (this.next    != null) tmpList.Add(this.next.Name);
+                tmpList.AddRange(this.musicQueue.Select(m => m.name));
 
                 //Return queue
                 Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
                     "Result:",
-                    $"```{queue}```"
+                    $"{tmpList.Aggregate((m1, m2) => $"{m1}\n{m2}")}"
                 ); return;
             }
 
