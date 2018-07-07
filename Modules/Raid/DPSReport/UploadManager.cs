@@ -30,7 +30,7 @@ namespace DiscordBot.Modules.Raid.DPSReport
                     var item = kv.Value;
 
                     //Upload it
-                    var ret = Client.UploadLog(item.source, item.filename);
+                    var ret = Client.UploadLog(item.source, item.filename, "ei");
 
                     //Check if it was successful
                     var err = (ret == null) || !string.IsNullOrEmpty(ret.error);
