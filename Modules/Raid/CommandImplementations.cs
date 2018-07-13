@@ -650,7 +650,7 @@ namespace DiscordBot.Modules.Raid
         {
             unchecked
             {
-                //Prepare the has with the FNV offset basis 
+                //Prepare the hash with the FNV offset basis 
                 ulong hash = 14695981039346656037;
 
                 //Perform the main FNV-1a hash routine
@@ -758,6 +758,11 @@ namespace DiscordBot.Modules.Raid
         {
             //Get the raiders
             var raiders = RaidManager.CoalesceRaiders(handle);
+
+            //Move backups to the end
+            raiders = raiders.Where (e => !e.backup)
+                             .Union (raiders.Where(e => e.backup))
+                             .ToList();
 
             //Send to solver
             var comp = this.MakeRaidComp(raiders, compIdx);

@@ -243,15 +243,12 @@ namespace DiscordBot.Raids
                 //Open the raid file
                 using (FileStream fs = File.Open($"./raids/{handle.full_name}/raid.json", FileMode.Open, FileAccess.ReadWrite, FileShare.None))
                 {
-                    //Prepare the structure holding the data
-                    Raid raid;
-
                     //Get UTF-8 encoded text streams
                     StreamReader sr = new StreamReader(fs, Encoding.UTF8);
                     StreamWriter sw = new StreamWriter(fs, Encoding.UTF8);
 
                     //Deserialise the JSON
-                    raid = JsonConvert.DeserializeObject<Raid>(sr.ReadToEnd());
+                    var raid = JsonConvert.DeserializeObject<Raid>(sr.ReadToEnd());
 
                     //Reset the stream
                     fs.Seek     (0, SeekOrigin.Begin);
