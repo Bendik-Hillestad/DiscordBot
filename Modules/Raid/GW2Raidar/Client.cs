@@ -53,18 +53,23 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
                 case 17154:    return "Deimos";
 
                 //Wing 4 CM
-                case 16728874: return "Cairn (CM)";
+                /*case 16728874: return "Cairn (CM)";
                 case 16728852: return "Mursaat Overseer (CM)";
                 case 16728868: return "Samarog (CM)";
-                case 16728834: return "Deimos (CM)";
+                case 16728834: return "Deimos (CM)";*/
 
                 //Wing 5
                 case 19767:    return "Soulless Horror";
                 case 19450:    return "Dhuum";
 
                 //Wing 5 CM
-                case 16731447: return "Soulless Horror (CM)";
-                case 16731130: return "Dhuum (CM)";
+                /*case 16731447: return "Soulless Horror (CM)";
+                case 16731130: return "Dhuum (CM)";*/
+
+                //Wing 6
+                case 43974:    return "Conjured Amalgamate";
+                case 21105:    return "Largos Twins";
+                case 20934:    return "Qadim";
 
                 //Unknown
                 default: return $"Unknown #{bossID}";
@@ -106,18 +111,23 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
                 case 17154:    return (5, 3);
                 
                 //Wing 4 CM
-                case 16728874: return (6, 0);
+                /*case 16728874: return (6, 0);
                 case 16728852: return (6, 1);
                 case 16728868: return (6, 2);
-                case 16728834: return (6, 3);
+                case 16728834: return (6, 3);*/
 
                 //Wing 5
                 case 19767:    return (7, 0);
                 case 19450:    return (7, 1);
 
                 //Wing 5 CM
-                case 16731447: return (8, 0);
-                case 16731130: return (8, 1);
+                /*case 16731447: return (8, 0);
+                case 16731130: return (8, 1);*/
+
+                //Wing 6
+                case 43974:    return (9, 0);
+                case 21105:    return (9, 1);
+                case 20934:    return (9, 2);
 
                 //Unknown
                 default: return (Int32.MaxValue, Int32.MaxValue);
