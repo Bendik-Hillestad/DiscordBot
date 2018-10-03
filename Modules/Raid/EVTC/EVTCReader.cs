@@ -36,9 +36,9 @@ namespace DiscordBot.Modules.Raid.EVTC
             //Split into the different pieces
             var magic     = new ReadOnlySpan<byte>(header,  0, 4);
             var build     = new ReadOnlySpan<byte>(header,  4, 8);
-            var pad1      = header[12];
+            var unknown   = header[12];
             var encounter = new ReadOnlySpan<byte>(header, 13, 2);
-            var pad2      = header[15];
+            var pad       = header[15];
 
             //Check that the first 4 bytes are 'EVTC'
             if (!magic.SequenceEqual(HEADER_MAGIC))
@@ -47,8 +47,8 @@ namespace DiscordBot.Modules.Raid.EVTC
                 throw new EVTCMagicMissingException();
             }
 
-            //Check that the paddings are NUL bytes
-            if ((pad1 != pad2) || (pad1 != 0))
+            //Check that the padding is a NUL byte
+            if (pad != 0)
             {
                 //The header is corrupt
                 throw new EVTCBadHeaderException();
