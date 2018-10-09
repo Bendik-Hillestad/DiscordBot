@@ -21,12 +21,12 @@ namespace DiscordBot.Modules.Raid
             //Open the zip archive
             var zip = new ZipArchive(zipFile, ZipArchiveMode.Read, true);
             
-            //Get only the files that match the .evtc or .zip extension
-            var regex = new Regex(@"[A-Za-z0-9\-_]+(\.evtc|\.zip)");
+            //Get only the files that match the .evtc or .zip extension (or evtc.tmp)
+            var regex = new Regex(@"^[A-Za-z0-9\-_\.]+(\.evtc\.tmp|\.evtc|\.zip)$");
             var files = zip.Entries.Where(e => regex.IsMatch(e.Name));
 
-            //Eliminate any large files (>30MB)
-            files = files.Where(e => e.Length <= 3e+7);
+            //Eliminate any large files (>50MB)
+            files = files.Where(e => e.Length <= 5e+7);
 
             //Go through the files
             foreach (var file in files)
@@ -39,15 +39,22 @@ namespace DiscordBot.Modules.Raid
                 }
                 else
                 {
+                    //Workaround for arcdps
+                    var outputName = file.Name;
+                    if (outputName.EndsWith(".tmp"))
+                    {
+                        outputName = outputName.Substring(0, outputName.Length - 4);
+                    }
+
                     //Extract the file
-                    var path = Path.Combine(dst, file.Name);
+                    var path = Path.Combine(dst, outputName);
                     file.ExtractToFile(path);
 
                     //Open a stream to it
                     var stream = new MultiReader(path);
                     
                     //Yield the stream
-                    yield return (file.Name, stream);
+                    yield return (outputName, stream);
                 }
             }
         }
