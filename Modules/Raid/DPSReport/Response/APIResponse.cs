@@ -17,19 +17,16 @@ namespace DiscordBot.Modules.Raid.DPSReport.Response
         public int    bossId  { get; set; }
     }
 
-    public sealed class EVTCMetaData
-    {
-        public Dictionary<string, Player> players { get; set; }
-        public EVTCInfo                   evtc    { get; set; }
-    }
-
     public sealed class UploadResponse
     {
-        public string       id        { get; set; }
-        public string       permalink { get; set; }
-        public string       userToken { get; set; }
-        public string       generator { get; set; }
-        public EVTCMetaData metadata  { get; set; }
-        public string       error     { get; set; }
+        public string                     id           { get; set; }
+        public string                     permalink    { get; set; }
+		public long                       uploadTime   { get; set; }
+		public long                       encounterTime{ get; set; }
+        public string                     userToken    { get; set; }
+        public string                     generator    { get; set; }
+		public EVTCInfo                   evtc         { get; set; }
+		public Dictionary<string, Player> players      { get; set; }
+        public string                     error        { get; set; }
     }
 }
