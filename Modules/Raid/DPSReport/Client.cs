@@ -14,9 +14,9 @@ namespace DiscordBot.Modules.Raid.DPSReport
     public static class Client
     {
         //private static readonly string GET_TOKEN_URI = @"https://dps.report/getUserToken"; //OPTIONAL, maybe in the future?
-        private static readonly string UPLOAD_URI    = @"https://dps.report/uploadContent?json=1&rotation_weap1=1&generator=rh";
+        private static readonly string UPLOAD_URI    = @"https://dps.report/uploadContent?json=1&rotation_weap1=1&generator={0}";
 
-        public static UploadResponse UploadLog(Stream stream, string name)
+        public static UploadResponse UploadLog(Stream stream, string name, string generator = "rh")
         {
             //Catch any errors
             return Debug.Try(() =>
@@ -38,8 +38,11 @@ namespace DiscordBot.Modules.Raid.DPSReport
                     //Prepare our container for the response
                     string response = null;
 
+                    //Format the request URI
+                    var uri = string.Format(UPLOAD_URI, generator);
+
                     //Prepare our request message
-                    var requestMessage = new HttpRequestMessage(HttpMethod.Post, UPLOAD_URI)
+                    var requestMessage = new HttpRequestMessage(HttpMethod.Post, uri)
                     {
                         Version = HttpVersion.Version10,
                         Content = content

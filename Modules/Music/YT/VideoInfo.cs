@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace DiscordBot.YT
+﻿namespace DiscordBot.Modules.Music.YT
 {
     public struct VideoInfo
     {

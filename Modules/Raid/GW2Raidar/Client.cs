@@ -23,48 +23,53 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
             switch (bossID)
             {
                 //99CM
-                case 17021:    return "MAMA (CM)";
-                case 17028:    return "Siax (CM)";
-                case 16948:    return "Ensolyss (CM)";
+                case  17021:    return "MAMA (CM)";
+                case  17028:    return "Siax (CM)";
+                case  16948:    return "Ensolyss (CM)";
 
                 //100CM
-                case 17632:    return "Skorvald (CM)";
-                case 17949:    return "Artsariiv (CM)";
-                case 17759:    return "Arkk (CM)";
+                case  17632:    return "Skorvald (CM)";
+                case  17949:    return "Artsariiv (CM)";
+                case  17759:    return "Arkk (CM)";
 
                 //Wing 1
-                case 15438:    return "Vale Guardian";
-                case 15429:    return "Gorseval";
-                case 15375:    return "Sabetha";
+                case  15438:    return "Vale Guardian";
+                case  15429:    return "Gorseval";
+                case  15375:    return "Sabetha";
 
                 //Wing 2
-                case 16123:    return "Slothasor";
-                case 16115:    return "Matthias";
+                case  16123:    return "Slothasor";
+                case  16115:    return "Matthias";
 
                 //Wing 3
-                case 16235:    return "Keep Construct";
-                case 16246: //FALLTHROUGH
-                case 16286:    return "Xera";
+                case  16235:    return "Keep Construct";
+                case  16246: //FALLTHROUGH
+                case  16286:    return "Xera";
 
                 //Wing 4
-                case 17194:    return "Cairn";
-                case 17172:    return "Mursaat Overseer";
-                case 17188:    return "Samarog";
-                case 17154:    return "Deimos";
+                case  17194:    return "Cairn";
+                case  17172:    return "Mursaat Overseer";
+                case  17188:    return "Samarog";
+                case  17154:    return "Deimos";
 
                 //Wing 4 CM
-                case 16728874: return "Cairn (CM)";
+                /*case 16728874: return "Cairn (CM)";
                 case 16728852: return "Mursaat Overseer (CM)";
                 case 16728868: return "Samarog (CM)";
-                case 16728834: return "Deimos (CM)";
+                case 16728834: return "Deimos (CM)";*/
 
                 //Wing 5
-                case 19767:    return "Soulless Horror";
-                case 19450:    return "Dhuum";
+                case  19767:    return "Soulless Horror";
+                case  19450:    return "Dhuum";
 
                 //Wing 5 CM
-                case 16731447: return "Soulless Horror (CM)";
-                case 16731130: return "Dhuum (CM)";
+                /*case 16731447: return "Soulless Horror (CM)";
+                case 16731130: return "Dhuum (CM)";*/
+
+                //Wing 6
+                case -21562:    return "Conjured Amalgamate";
+                case  21105:    return "Largos Twins";
+                case  20934:    return "Qadim";
 
                 //Unknown
                 default: return $"Unknown #{bossID}";
@@ -76,48 +81,53 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
             switch (bossID)
             {
                 //99CM
-                case 17021:    return (0, 0);
-                case 17028:    return (0, 1);
-                case 16948:    return (0, 2);
+                case  17021:    return (0, 0);
+                case  17028:    return (0, 1);
+                case  16948:    return (0, 2);
 
                 //100CM
-                case 17632:    return (1, 0);
-                case 17949:    return (1, 1);
-                case 17759:    return (1, 2);
+                case  17632:    return (1, 0);
+                case  17949:    return (1, 1);
+                case  17759:    return (1, 2);
 
                 //Wing 1
-                case 15438:    return (2, 0);
-                case 15429:    return (2, 1);
-                case 15375:    return (2, 2);
+                case  15438:    return (2, 0);
+                case  15429:    return (2, 1);
+                case  15375:    return (2, 2);
 
                 //Wing 2
-                case 16123:    return (3, 0);
-                case 16115:    return (3, 1);
+                case  16123:    return (3, 0);
+                case  16115:    return (3, 1);
 
                 //Wing 3
-                case 16235:    return (4, 0);
-                case 16246: //FALLTHROUGH
-                case 16286:    return (4, 1);
+                case  16235:    return (4, 0);
+                case  16246: //FALLTHROUGH
+                case  16286:    return (4, 1);
 
                 //Wing 4
-                case 17194:    return (5, 0);
-                case 17172:    return (5, 1);
-                case 17188:    return (5, 2);
-                case 17154:    return (5, 3);
+                case  17194:    return (5, 0);
+                case  17172:    return (5, 1);
+                case  17188:    return (5, 2);
+                case  17154:    return (5, 3);
                 
                 //Wing 4 CM
-                case 16728874: return (6, 0);
+                /*case 16728874: return (6, 0);
                 case 16728852: return (6, 1);
                 case 16728868: return (6, 2);
-                case 16728834: return (6, 3);
+                case 16728834: return (6, 3);*/
 
                 //Wing 5
-                case 19767:    return (7, 0);
-                case 19450:    return (7, 1);
+                case  19767:    return (7, 0);
+                case  19450:    return (7, 1);
 
                 //Wing 5 CM
-                case 16731447: return (8, 0);
-                case 16731130: return (8, 1);
+                /*case 16731447: return (8, 0);
+                case 16731130: return (8, 1);*/
+
+                //Wing 6
+                case -21562:    return (9, 0);
+                case  21105:    return (9, 1);
+                case  20934:    return (9, 2);
 
                 //Unknown
                 default: return (Int32.MaxValue, Int32.MaxValue);

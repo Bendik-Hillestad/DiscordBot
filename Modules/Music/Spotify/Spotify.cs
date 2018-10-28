@@ -4,10 +4,10 @@ using System.Text;
 
 using Newtonsoft.Json;
 
-using DiscordBot.YT;
+using DiscordBot.Modules.Music.Utility;
 using DiscordBot.Utils;
 
-namespace DiscordBot.ST
+namespace DiscordBot.Modules.Music.Spotify
 {
     public static class Spotify
     {
@@ -231,7 +231,7 @@ namespace DiscordBot.ST
             this.offset = offset;
         }
 
-        /*public*/ Song? IPlaylist.GetNext()
+        /*public*/ /*Song? IPlaylist.GetNext()
         {
             //Lock to prevent race conditions
             lock (this.o)
@@ -248,7 +248,7 @@ namespace DiscordBot.ST
                 //Return item
                 return new Song { name = next };
             }
-        }
+        }*/
 
         private string   title;
         private string[] playlist;

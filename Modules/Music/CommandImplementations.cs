@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -8,9 +9,9 @@ using Discord;
 using Discord.Audio;
 using DiscordBot.Commands;
 using DiscordBot.Core;
-using DiscordBot.Music;
+using DiscordBot.Modules.Music.Utility;
+using DiscordBot.Modules.Music.YT;
 using DiscordBot.Utils;
-using DiscordBot.YT;
 
 namespace DiscordBot.Modules.Music
 {
@@ -66,12 +67,6 @@ namespace DiscordBot.Modules.Music
                             return Task.CompletedTask;
                         };
                     });
-                }
-
-                //Spawn the downloader if it's not started yet (or has crashed)
-                if (this.audioDownloader == null)
-                {
-                    this.SpawnAudioStreamDownloader();
                 }
 
                 //Spawn the streamer if it's not started yet (or has crashed)
@@ -143,49 +138,47 @@ namespace DiscordBot.Modules.Music
                 }
             }
 
-            //Get video info
-            var videoInfo = YouTube.GetVideoInfo(id);
+            //Try to get video info
+            var tmp = YouTube.GetVideoInfo(id);
 
             //Check that it's not null
-            Debug.Assert(videoInfo != null, "Video info is null.");
+            Debug.Assert(tmp != null, "Video info is null.");
+
+            //Get the value
+            var videoInfo = tmp.Value;
 
             //Calculate duration
-            int dur = Regex.Match(videoInfo.Value.length, @"^(\d+)(?:\:(\d+))?(?:\:(\d+))?$").Groups
+            int dur = Regex.Match(videoInfo.length, @"^(\d+)(?:\:(\d+))?(?:\:(\d+))?$").Groups
                            .Select(g => g?.Value).Where(s => !string.IsNullOrWhiteSpace(s))
                            .Skip  (1).Reverse()
                            .Select((s, i) => int.Parse(s) * (int)(Math.Pow(60, i) + 0.5))
                            .Sum   ();
 
             //Check that it's not too long
-            if (dur < 600)
+            if (dur < 36000)
             {
-                //Queue for download
-                this.QueueDownload(videoInfo.Value);
+                //Store the duration
+                var old = videoInfo.length;
+                videoInfo.length = dur.ToString();
 
-                //Find the extension
-                var regex = Regex.Match(videoInfo.Value.name, @"(?:\.([^.]+?)$)");
+                //Queue the music
+                this.musicQueue.Enqueue(videoInfo);
 
-                //Extract the title
-                var title = videoInfo.Value.name.Substring(0, regex.Index);
+                //Build the response
+                var response = new EmbedBuilder().WithColor(Color.Blue)
+                                                 .WithThumbnailUrl(videoInfo.thumb)
+                                                 .AddField("Success", $"{videoInfo.name} [{old}] was added to the queue.")
+                                                 .Build();
 
-                //Return success
-                Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
-                    "Success",
-                    $"{title} [{Utility.PadNum(dur / 60)}:{Utility.PadNum(dur % 60)}] was added to the queue."
-                ); return;
+                //Send the response
+                ctx.message.Channel.SendMessageAsync("", embed: response);
             }
             else
             {
-                //Find the extension
-                var regex = Regex.Match(videoInfo.Value.name, @"(?:\.([^.]+?)$)");
-
-                //Extract the title
-                var title = videoInfo.Value.name.Substring(0, regex.Index);
-
                 //Return video too long error
                 Bot.GetBotInstance().SendErrorMessage(ctx.message.Channel,
                     "Error",
-                    $"{title} [{videoInfo.Value.length}] could not be added.\nIt's too long."
+                    $"{videoInfo.name} [{videoInfo.length}] could not be added.\nIt's too long."
                 ); return;
             }
         }
@@ -196,7 +189,7 @@ namespace DiscordBot.Modules.Music
             Precondition.Assert(this.audioClient != null, "Not connected to a voice channel.");
 
             //Check if we're playing anything
-            Precondition.Assert(this.source != null, "Not playing anything.");
+            Precondition.Assert(this.current != null, "Not playing anything.");
 
             //Request skip
             this.skip = true;
@@ -210,58 +203,46 @@ namespace DiscordBot.Modules.Music
 
         public void music_queue_impl(Context ctx)
         {
-            //Grab the songs in the queue
-            var queue = (!string.IsNullOrWhiteSpace(this.source?.name)) ? ("\n--> " + this.source.Value.name) : "";
-            for (int i = 0; i < this.songQueue.Count; i++)
+            //Check if there is anything in the queue
+            if (this.musicQueue.Count > 0)
             {
-                queue += "\n    " + this.songQueue.ElementAt(i).name;
-            }
+                //Grab the names
+                var tmpList = new List<string>();
+                if (this.current != null) tmpList.Add(this.current.Name);
+                if (this.next    != null) tmpList.Add(this.next.Name);
+                tmpList.AddRange(this.musicQueue.Select(m => m.name));
 
-            //Show downloads
-            for (int i = 0; i < Math.Min(this.downloadQueue.Count, 7); i++)
-            {
-                queue += "\n    " + (this.downloadQueue.ElementAt(i).name ?? "<unresolved>");
-            }
-
-            //Check if there were any songs
-            if (!string.IsNullOrWhiteSpace(queue))
-            {
                 //Return queue
                 Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
                     "Result:",
-                    $"```{queue}```"
-                );
+                    $"{tmpList.Aggregate((m1, m2) => $"{m1}\n{m2}")}"
+                ); return;
             }
-            else
-            {
-                //Return empty
-                Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
-                    "Result:",
-                    "None"
-                );
-            }
+
+            //Return empty
+            Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
+                "Result:",
+                "None"
+            );
         }
 
         public void music_np_impl(Context ctx)
         {
             //Check if we're playing anything
-            if (!string.IsNullOrWhiteSpace(this.source?.name))
+            if (!string.IsNullOrWhiteSpace(this.current?.Name))
             {
                 //Return the title
                 Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
                     "Now playing:",
-                    this.source.Value.name
-                );
+                    this.current.Name
+                ); return;
             }
-            else
-            {
-                //Return the title
-                Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
-                    "Now playing:",
-                    "Nothing"
-                );
-            }
-            
+
+            //Return nothing
+            Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
+                "Now playing:",
+                "Nothing"
+            );
         }
 
         private static string GetYouTubeVideoID(string str)
@@ -331,92 +312,6 @@ namespace DiscordBot.Modules.Music
             return null;
         }
 
-        private void SpawnAudioStreamDownloader()
-        {
-            //Launch a new thread that will download audio streams
-            this.audioDownloader = Task.Factory.StartNew(() =>
-            {
-                //Loop forever
-                while (true)
-                {
-                    //Wait for signal
-                    this.downloadSemaphore.WaitOne();
-
-                    //Get next item to download
-                    var next = this.GetNextDownload();
-
-                    //Skip if it's null
-                    if (!next.HasValue) continue;
-
-                    //Try to execute
-                    string path = null;
-                    var song = Debug.Try<Song?>(() =>
-                    {
-                        //Prepare the Song structure
-                        Song s = new Song { id = next.Value.id };
-
-                        //Find the extension
-                        var regex = Regex.Match(next.Value.name, @"(?:\.([^.]+?)$)");
-
-                        //Extract the title
-                        s.name = next.Value.name.Substring(0, regex.Index);
-
-                        //Download the audio
-                        path = YouTube.DownloadAudio(next.Value);
-
-                        //Calculate gain to normalize audio
-                        var gain = FFmpeg.CalculateGain(path);
-
-                        //Transcode to uncompressed 16-bit 48khz stream
-                        s.data = FFmpeg.Transcode(path, gain);
-
-                        //Return the song
-                        return s;
-                    }, null);
-
-                    //Delete the temporary file
-                    if (path != null) Debug.Try(() => System.IO.File.Delete(path));
-
-                    //Check if we managed to download
-                    if (song.HasValue)
-                    {
-                        //Add to the queue
-                        this.QueueSong(song.Value);
-
-                        //Go back to start
-                        continue;
-                    }
-                    else
-                    {
-                        //Log error
-                        Logger.Log(LOG_LEVEL.ERROR, $"Couldn't find stream for {next.Value.name}.");
-
-                        //Trigger another download if not already triggered
-                        try { this.downloadSemaphore.Release(); } catch (Exception) { }
-                    }
-                }
-            }, TaskCreationOptions.LongRunning)
-            //Capture exit
-            .ContinueWith((t) =>
-            {
-                //Get errors
-                t.Exception?.Handle((ex) =>
-                {
-                    //Log error
-                    Logger.Log(LOG_LEVEL.ERROR, ex.Message);
-
-                    //Mark as handled
-                    return true;
-                });
-
-                //Log exit
-                Logger.Log(LOG_LEVEL.ERROR, "Audio downloader exited!");
-
-                //Set pointer to null
-                this.audioDownloader = null;
-            });
-        }
-
         private void SpawnAudioStreamer()
         {
             //Spawn the streaming thread
@@ -424,98 +319,100 @@ namespace DiscordBot.Modules.Music
             {
                 //Setup block size
                 const int blockSize = 3840;
+                Span<byte> buf = stackalloc byte[blockSize];
 
                 //Loop forever
                 while (true)
                 {
-                    //Check that the audio client is connected and we have a source
-                    if
-                    (
-                        (this.audioClient?.ConnectionState ?? ConnectionState.Disconnected) == ConnectionState.Connected &&
-                         this.audioOutStream != null && this.source != null
-                    )
+                    //Grab the next music to play
+                    this.current = this.next;
+                    this.next    = null;
+
+                    //Check if need to pop something from the queue
+                    if (this.current == null)
                     {
-                        //Capture errors so we just skip to next file when there's an issue
-                        try
+                        //Check if the queue has something
+                        if (!this.musicQueue.IsEmpty)
                         {
-                            //Grab the data
-                            var data   = this.source.Value.data;
-                            var offset = 0;
+                            //Pop a value from the queue
+                            VideoInfo tmp;
+                            while (!this.musicQueue.TryDequeue(out tmp));
 
-                            //Prepare a buffer
-                            var buffer = new Samples { raw = new byte[blockSize] };
+                            //Generate a stream from it
+                            this.current = YoutubeStream.CreateUnbuffered(tmp.id, tmp.name);
+                        }
+                    }
 
-                            //Loop until skip is requested (or stream is over)
-                            while (!this.skip)
+                    //Check if we have a value
+                    if (this.current != null)
+                    {
+                        //Check if the queue has something
+                        if (!this.musicQueue.IsEmpty)
+                        {
+                            //Peek at the front of the queue
+                            VideoInfo tmp;
+                            while (!this.musicQueue.TryPeek(out tmp));
+
+                            //Check that it's not too long, we don't want to buffer long videos
+                            if (int.Parse(tmp.length) < 1000)
                             {
-                                //Calculate number of bytes in the next chunk
-                                var byteCount = Math.Min(data.Length - offset, blockSize);
+                                //Pop it from the queue
+                                while (!this.musicQueue.TryDequeue(out tmp));
 
-                                //Check if there is more data
-                                if (byteCount > 0)
-                                {
-                                    //Copy into our buffer
-                                    Buffer.BlockCopy(data, offset, buffer.raw, 0, byteCount);
-
-                                    //Change the volume
-                                    Audio.AdjustVolume(ref buffer, this.volume);
-
-                                    //TODO: try { stream.write ... } catch { sleep }
-
-                                    //Send data
-                                    this.audioOutStream.Write(buffer.raw, 0, byteCount);
-
-                                    //Update offset
-                                    offset += byteCount;
-                                }
-                                else
-                                {
-                                    //Flush the stream
-                                    this.audioOutStream.Flush();
-
-                                    //Stop
-                                    break;
-                                }
+                                //Generate a stream from it
+                                this.next = YoutubeStream.CreateBuffered(tmp.id, tmp.name);
                             }
                         }
-                        catch (Exception ex)
-                        {
-                            //Log error
-                            Logger.Log(LOG_LEVEL.ERROR, ex.Message);
-                        }
-
-                        //Set source to null
-                        this.source = null;
-
-                        //Set skip to false
-                        this.skip = false;
                     }
                     else
                     {
-                        //Sleep
-                        Thread.Sleep(1000);
+                        //Sleep and retry
+                        Task.Delay(1000).GetAwaiter().GetResult();
+                        continue;
                     }
 
-                    //TODO: Use a semaphore here to block this thread instead of sleeping / spinning
-
-                    //Check if we're connected
-                    if 
-                    (
-                        (this.audioClient?.ConnectionState ?? ConnectionState.Disconnected) == ConnectionState.Connected &&
-                         this.audioOutStream != null
-                    )
+                    //Playing loop
+                    while (true)
                     {
-                        //Get the next song
-                        var next = this.GetNextSong();
+                        //Check if a skip is requested
+                        if (this.skip)
+                        {
+                            //Unset the flag
+                            this.skip = false;
 
-                        //Set new source
-                        this.source = next;
+                            //Check if we need to cancel the buffering
+                            if (this.current.IsBuffered)
+                            {
+                                //Cancel the buffering
+                                this.current.Cancellation.Cancel();
+                                this.current.WaitForExit();
+                            }
 
-                        //Update currently playing
-                        Bot.GetBotInstance().SetStatus(this.source?.name);
+                            //Stop playing
+                            break;
+                        }
 
-                        //Trigger download if not already downloading
-                        try { this.downloadSemaphore.Release(); } catch (Exception) { }
+                        //Sleep if we're not connected
+                        bool connected = (this.audioClient != null) && (this.audioClient.ConnectionState == ConnectionState.Connected) &&
+                                         (this.audioOutStream != null);
+                        while (!connected) Task.Delay(1000).GetAwaiter().GetResult();
+
+                        //Grab a block of samples
+                        var count = this.current.ReadBlock(buf);
+
+                        //Stop playing if we're done
+                        if (count == 0)
+                        {
+                            this.audioOutStream.Flush();
+                            break;
+                        }
+
+                        //Change the volume
+                        //Audio.AdjustVolume(ref samples, this.volume);
+
+                        //Send data
+                        try   { this.audioOutStream.Write(buf.Slice(0, count)); }
+                        catch {}
                     }
                 }
             }, TaskCreationOptions.LongRunning)
@@ -538,63 +435,6 @@ namespace DiscordBot.Modules.Music
                 //Set pointer to null
                 this.audioStreamer = null;
             });
-        }
-
-        private void QueueSong(Song s)
-        {
-            //Lock to prevent race conditions
-            lock (this.songQueueLock)
-            {
-                //Add song to queue
-                this.songQueue.Enqueue(s);
-            }
-        }
-
-        private void QueueDownload(VideoInfo videoInfo)
-        {
-            //Lock to prevent race conditions
-            lock (this.downloadQueueLock)
-            {
-                //Push onto the queue
-                this.downloadQueue.Enqueue(videoInfo);
-
-                //Trigger download if not already downloading
-                try { this.downloadSemaphore.Release(); } catch (Exception) { }
-            }
-        }
-
-        private Song? GetNextSong()
-        {
-            //Lock to prevent race conditions
-            lock (this.songQueueLock)
-            {
-                //Check if the queue has any elements
-                if (this.songQueue.Count > 0)
-                {
-                    //Pop an element off of the queue
-                    return this.songQueue.Dequeue();
-                }
-            }
-
-            //Return failure
-            return null;
-        }
-
-        private VideoInfo? GetNextDownload()
-        {
-            //Lock to prevent race conditions
-            lock (this.downloadQueueLock)
-            {
-                //Check if the queue has any elements
-                if (this.downloadQueue.Count > 0)
-                {
-                    //Pop an element off of the queue
-                    return this.downloadQueue.Dequeue();
-                }
-            }
-
-            //Get the next song from our default playlist
-            return null;//this.defaultPlaylist?.GetNext();
         }
     }
 }

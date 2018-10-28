@@ -1,17 +1,11 @@
-﻿using System;
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Web;
 using System.Diagnostics;
-using System.Threading.Tasks;
-using System.IO;
 using System.Text.RegularExpressions;
-using System.Text;
 
 using Newtonsoft.Json;
 
-using DiscordBot.Utils;
-
-namespace DiscordBot.YT
+namespace DiscordBot.Modules.Music.YT
 {
     public static class YouTube
     {
@@ -78,11 +72,6 @@ namespace DiscordBot.YT
 
         public static VideoInfo? GetVideoInfo(string id)
         {
-            /*
-             * sudo -H youtube-dl -f 251/bestaudio -o '/mnt/ramdisk/DiscordBot/%(title)s.%(ext)s' 
-             * --playlist-items 1,2 "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ" 
-             */
-
             //Try to execute
             return Utils.Debug.Try<VideoInfo?>(() =>
             {
@@ -90,92 +79,44 @@ namespace DiscordBot.YT
                 var ytdl = Process.Start(new ProcessStartInfo
                 {
                     FileName               = $"youtube-dl",
-                    Arguments              = $"-f 251/bestaudio -o \"%(title)s.%(ext)s\" " +
-                                             $"--get-filename --get-thumbnail --get-duration {id}",
+                    Arguments              = $"--prefer-insecure -e --get-thumbnail --get-duration {id}",
                     UseShellExecute        = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError  = true
                 });
 
-                //Capture and parse output asynchronously
-                var task = Task.Run(() =>
-                {
-                    //Prepare video info structure
-                    VideoInfo info;
-                    info.id = id;
+                //Prepare video info structure
+                VideoInfo info;
+                info.id = id;
 
-                    //Get the output
-                    string str = ytdl.StandardOutput.ReadToEndAsync().GetAwaiter().GetResult();
+                //Get the output
+                var str = ytdl.StandardOutput.ReadToEndAsync().GetAwaiter().GetResult();
+                Utils.Debug.Assert(!string.IsNullOrWhiteSpace(str), "No youtube-dl output");
 
-                    Utils.Debug.Assert(!string.IsNullOrWhiteSpace(str), "No youtube-dl output");
+                //Split by lines
+                var lines = Regex.Split(str, @"\r\n|\r|\n");
 
-                    //Split by lines
-                    string[] lines = Regex.Split(str, @"\r\n|\r|\n");
+                //Check that it's valid
+                Utils.Debug.Assert(lines != null,     "Lines are null");
+                Utils.Debug.Assert(lines.Length >= 2, "Didn't get enough output");
 
-                    //Check that it's valid
-                    Utils.Debug.Assert(lines != null,     "Lines are null");
-                    Utils.Debug.Assert(lines.Length >= 3, "Didn't get enough output");
+                //Get title
+                info.name = lines[0];
 
-                    //Get thumbnail
-                    info.thumb = lines[0];
+                //Get thumbnail
+                info.thumb = lines[1];
 
-                    //Get filename
-                    info.name = lines[1];
+                //Get the duration
+                info.length = lines[2];
 
-                    //Get the duration
-                    info.length = lines[2];
-
-                    //Check that the values are not null
-                    Utils.Debug.Assert(!string.IsNullOrWhiteSpace(info.id),     "ID is null");
-                    Utils.Debug.Assert(!string.IsNullOrWhiteSpace(info.name),   "Name is null");
-                    Utils.Debug.Assert(!string.IsNullOrWhiteSpace(info.length), "Length is null");
-                    Utils.Debug.Assert(!string.IsNullOrWhiteSpace(info.thumb),  "Thumb is null");
-
-                    //Return the info
-                    return info;
-                });
-
-                //Return info
-                return task.GetAwaiter().GetResult();
-            }, null);
-        }
-
-        public static string DownloadAudio(VideoInfo videoInfo)
-        {
-            //Try to execute
-            return Utils.Debug.Try<string>(() =>
-            {
                 //Check that the values are not null
-                Utils.Debug.Assert(!string.IsNullOrWhiteSpace(videoInfo.id),     "ID is null");
-                Utils.Debug.Assert(!string.IsNullOrWhiteSpace(videoInfo.name),   "Name is null");
-                Utils.Debug.Assert(!string.IsNullOrWhiteSpace(videoInfo.length), "Length is null");
-                Utils.Debug.Assert(!string.IsNullOrWhiteSpace(videoInfo.thumb),  "Thumb is null");
+                Utils.Debug.Assert(!string.IsNullOrWhiteSpace(info.id),     "ID is null");
+                Utils.Debug.Assert(!string.IsNullOrWhiteSpace(info.name),   "Name is null");
+                Utils.Debug.Assert(!string.IsNullOrWhiteSpace(info.length), "Length is null");
+                Utils.Debug.Assert(!string.IsNullOrWhiteSpace(info.thumb),  "Thumb is null");
 
-                //Find the extension
-                var regex = Regex.Match(videoInfo.name, @"(?:\.([^.]+?)$)");
-
-                //Extract the title (and base64-encode it) and extension
-                var title = Convert.ToBase64String(Encoding.UTF8.GetBytes(videoInfo.name.Substring(0, regex.Index)));
-                var ext = regex.Groups[1].Value;
-
-                //Calculate the output path
-                var path = Path.Combine(Utility.GetTempDirectory(), $"{title}.{ext}");
-
-                //Run youtube-dl
-                var ytdl = Process.Start(new ProcessStartInfo
-                {
-                    FileName               = $"youtube-dl",
-                    Arguments              = $"-f 251/bestaudio -o \"{path}\" {videoInfo.id}",
-                    UseShellExecute        = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError  = true
-                });
-
-                //Await exit
-                ytdl.WaitForExit();
-
-                //Return the path to the audio
-                return path;
+                //Return the info
+                return info;
             }, null);
         }
     }

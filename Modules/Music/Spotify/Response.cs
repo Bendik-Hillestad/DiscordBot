@@ -1,4 +1,4 @@
-﻿namespace DiscordBot.ST
+﻿namespace DiscordBot.Modules.Music.Spotify
 {
     public sealed class Response
     {
