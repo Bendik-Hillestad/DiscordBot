@@ -20,7 +20,7 @@ namespace DiscordBot.Modules.Core
             var utcNow = DateTimeOffset.UtcNow;
 
             //FIXME: Check for DST
-            bool dst = true;//DateTime.Now.IsDaylightSavingTime();
+            bool dst = false;//DateTime.Now.IsDaylightSavingTime();
 
             //Reliably get the actual time
             var now = utcNow.AddHours(dst ? 2 : 1);
