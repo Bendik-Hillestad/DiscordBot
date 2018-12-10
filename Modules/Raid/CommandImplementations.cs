@@ -75,10 +75,33 @@ namespace DiscordBot.Modules.Raid
             //Extract the roles to create our filter
             var filter = this.GetRoles(roles);
 
+            //Grab the raiders
+            var roster = RaidManager.CoalesceRaiders(handle);
+
+            //Check if this is a selling raid
+            if (RaidManager.GetRaidData(handle).Value.sell)
+            {
+                //Grab up to 8 raiders who are not backups or buyers
+                var mainRoster = roster.Where(e => !e.backup && !e.roles.Contains("BUYER"))
+                                       .Take (8);
+
+                //Apply backup roles
+                for (int i = 0; i < roster.Count; i++)
+                {
+                    var tmp = roster[i];
+
+                    if (!tmp.roles.Contains("BUYER") && !mainRoster.Contains(tmp))
+                    {
+                        tmp.backup = true;
+                    }
+
+                    roster[i] = tmp;
+                }
+            }
+
             //Get the raiders that match the filter
-            var roster = RaidManager.CoalesceRaiders(handle)
-                                    .Where (e => e.roles.Intersect(filter).Count() > 0)
-                                    .ToList();
+            roster = roster.Where (e => e.roles.Intersect(filter).Count() > 0)
+                           .ToList();
 
             //Check that it's not empty
             if (roster.Count > 0)

@@ -403,17 +403,6 @@ namespace DiscordBot.Raids
                 fs.Seek     (0, SeekOrigin.Begin);
                 fs.SetLength(0);
 
-                //Check if this is a selling raid and the entry is not a buyer
-                if (raid.sell && !entry.roles.Contains("BUYER"))
-                {
-                    //Check if the roster cap of 8 has been reached
-                    if (raid.roster.Distinct().Count(e => !e.roles.Contains("BUYER")) >= 8)
-                    {
-                        //Force backup role
-                        entry.backup = true;
-                    }
-                }
-
                 //Append the raider
                 raid.roster.Add(entry);
 
