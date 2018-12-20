@@ -39,6 +39,9 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
 
                 //Wing 2
                 case  16123:    return "Slothasor";
+                case  16088: //FALLTHROUGH
+                case  16137: //FALLTHROUGH
+                case  16125:    return "Trio";
                 case  16115:    return "Matthias";
 
                 //Wing 3
@@ -97,7 +100,10 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
 
                 //Wing 2
                 case  16123:    return (3, 0);
-                case  16115:    return (3, 1);
+                case  16088: //FALLTHROUGH
+                case  16137: //FALLTHROUGH
+                case  16125:    return (3, 1);
+                case  16115:    return (3, 2);
 
                 //Wing 3
                 case  16235:    return (4, 0);

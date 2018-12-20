@@ -20,10 +20,31 @@ namespace DiscordBot.Modules.Raid
 
             //Open the zip archive
             var zip = new ZipArchive(zipFile, ZipArchiveMode.Read, true);
-            
-            //Get only the files that match the .evtc or .zip extension (or evtc.tmp)
-            var regex = new Regex(@"^[A-Za-z0-9\-_\.]+(\.evtc\.tmp|\.evtc|\.zip)$");
-            var files = zip.Entries.Where(e => regex.IsMatch(e.Name));
+
+            //Get only the files with an extension we recognize
+            var files = zip.Entries.Where(e =>
+            {
+                //Check that it's not a directory
+                if (e.FullName.EndsWith('/')) return false;
+
+                //Get extension
+                string ext = Path.GetExtension(e.Name);
+
+                //Check if the file has no extension
+                if (string.IsNullOrEmpty(ext)) return true;
+
+                //Check if it's an accepted extension
+                switch (ext)
+                {
+                    case ".zip":
+                    case ".evtc":
+                    case ".zevtc":
+                    case ".tmp":
+                        return true;
+
+                    default: return false;
+                }
+            });
 
             //Eliminate any large files (>50MB)
             files = files.Where(e => e.Length <= 5e+7);
@@ -32,19 +53,15 @@ namespace DiscordBot.Modules.Raid
             foreach (var file in files)
             {
                 //Check if it's another .zip file
-                if (file.Name.EndsWith(".zip"))
+                if (file.Name.EndsWith(".zip") || file.Name.EndsWith(".zevtc"))
                 {
                     //Recursively open
                     foreach (var nestedFile in GetUnzippedStreams(file.Open())) yield return nestedFile;
                 }
                 else
                 {
-                    //Workaround for arcdps
-                    var outputName = file.Name;
-                    if (outputName.EndsWith(".tmp"))
-                    {
-                        outputName = outputName.Substring(0, outputName.Length - 4);
-                    }
+                    //Get the file name with .evtc extension
+                    var outputName = Path.ChangeExtension(file.Name, ".evtc");
 
                     //Extract the file
                     var path = Path.Combine(dst, outputName);
