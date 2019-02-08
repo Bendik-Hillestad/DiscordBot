@@ -42,6 +42,74 @@ namespace DiscordBot.Modules.Raid
                );
         }
 
+        private void raid_edit_date_impl(Context ctx, int id, int day, int month, int year, int hours, int minutes, int offset)
+        {
+            //Get a handle to the raid
+            var handle = RaidManager.GetRaidFromID(id).Value;
+
+            //Get the date
+            var date = new DateTimeOffset(year, month, day, hours, minutes, 0, new TimeSpan(offset, 0, 0));
+
+            //Move the raid
+            if (RaidManager.MoveRaid(handle, date))
+            {
+                //Return success
+                Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
+                    "Success",
+                    "Raid updated.",
+                    $"Local time:", date
+                );
+            }
+            else
+            {
+                //Return error
+                Bot.GetBotInstance().SendErrorMessage(ctx.message.Channel,
+                    "Error", "There was an error #blamearnoud."
+                );
+            }
+        }
+
+        private void raid_edit_time_impl(Context ctx, int id, int hours, int minutes, int offset)
+        {
+            //Get a handle to the raid
+            var handle = RaidManager.GetRaidFromID(id).Value;
+
+            //Grab the data from the raid
+            var data = RaidManager.GetRaidData(handle);
+
+            //Check that it's valid
+            Precondition.Assert(data.HasValue, "There was an error processing the raid.");
+
+            //Get the current date
+            var date = DateTimeOffset.FromUnixTimeSeconds(data.Value.timestamp);
+
+            //Pass on
+            raid_edit_date_impl(ctx, id, date.Day, date.Month, date.Year, hours, minutes, offset);
+        }
+
+        private void raid_edit_desc_impl(Context ctx, int id, string description)
+        {
+            //Get a handle to the raid
+            var handle = RaidManager.GetRaidFromID(id).Value;
+
+            //Edit the description
+            if (RaidManager.EditDescription(handle, description))
+            {
+                //Return success
+                Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
+                    "Success",
+                    "Raid updated."
+                );
+            }
+            else
+            {
+                //Return error
+                Bot.GetBotInstance().SendErrorMessage(ctx.message.Channel,
+                    "Error", "There was an error #blamearnoud."
+                );
+            }
+        }
+
         private void raid_delete_impl(Context ctx, int id)
         {
             //Get a handle to the raid

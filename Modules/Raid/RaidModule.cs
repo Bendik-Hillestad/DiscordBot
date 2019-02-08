@@ -110,6 +110,64 @@ namespace DiscordBot.Modules.Raid
             this.raid_create_sell(ctx, "today", 20, 00, offset, "W1-4");
         }
 
+        [Command("raid edit date {} {}/{} {}:{} UTC{}")]
+        public void raid_edit_date(Context ctx, uint id, uint day, uint month, uint hours, uint minutes, int offset)
+        {
+            //Determine if a raid with this ID exists
+            var exists = RaidManager.EnumerateRaids().Any(r => r.raid_id == id);
+            Precondition.Assert(exists, $"No raid with that id ({id}).");
+
+            //Derive the year
+            var year = DateTool.GetDefaultYear((int)day, (int)month);
+
+            //Validate our inputs
+            Precondition.Assert(DateTool.IsValidDate((int)day, (int)month, year), "Invalid date!");
+            Precondition.Assert(hours < 24, "Invalid hours!");
+            Precondition.Assert(minutes < 60, "Invalid minutes!");
+            Precondition.Assert(Math.Abs(offset) <= 12, "Invalid offset!");
+
+            //Pass on to the implementation
+            this.raid_edit_date_impl(ctx, (int)id, (int)day, (int)month, year, (int)hours, (int)minutes, offset);
+        }
+
+        [Command("raid edit date {} {} {}:{} UTC{}")]
+        public void raid_edit_date(Context ctx, uint id, [RegexParameter(@"today|tomorrow")] string day, uint hours, uint minutes, int offset)
+        {
+            //Get the current date
+            var date = DateTimeOffset.UtcNow.ToOffset(new TimeSpan(offset, 0, 0));
+            if (day == "tomorrow") date += new TimeSpan(1, 0, 0, 0);
+
+            //Pass on
+            this.raid_edit_date(ctx, id, (uint)date.Day, (uint)date.Month, hours, minutes, offset);
+        }
+
+        [Command("raid edit time {} {}:{} UTC{}")]
+        public void raid_edit_time(Context ctx, uint id, uint hours, uint minutes, int offset)
+        {
+            //Determine if a raid with this ID exists
+            var exists = RaidManager.EnumerateRaids().Any(r => r.raid_id == id);
+            Precondition.Assert(exists, $"No raid with that id ({id}).");
+
+            //Validate our inputs
+            Precondition.Assert(hours < 24, "Invalid hours!");
+            Precondition.Assert(minutes < 60, "Invalid minutes!");
+            Precondition.Assert(Math.Abs(offset) <= 12, "Invalid offset!");
+
+            //Pass on to the implementation
+            this.raid_edit_time_impl(ctx, (int)id, (int)hours, (int)minutes, offset);
+        }
+
+        [Command("raid edit desc {} {}")]
+        public void raid_edit_desc(Context ctx, uint id, [RegexParameter(@"[\S\s]+")] string description)
+        {
+            //Determine if a raid with this ID exists
+            var exists = RaidManager.EnumerateRaids().Any(r => r.raid_id == id);
+            Precondition.Assert(exists, $"No raid with that id ({id}).");
+
+            //Pass on to the implementation
+            this.raid_edit_desc_impl(ctx, (int)id, description);
+        }
+
         [Command("raid delete {}")]
         public void raid_delete(Context ctx, uint id)
         {

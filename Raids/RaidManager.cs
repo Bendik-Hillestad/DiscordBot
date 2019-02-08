@@ -351,6 +351,71 @@ namespace DiscordBot.Raids
             });
         }
 
+        public static bool EditDescription(RaidHandle handle, string description)
+        {
+            //Catch any errors
+            return Debug.Try(() =>
+            {
+                //Open the raid file
+                using (FileStream fs = File.Open($"./raids/{handle.full_name}/raid.json", FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                {
+                    //Prepare the structure holding the data
+                    Raid raid;
+
+                    //Get UTF-8 encoded text streams
+                    StreamReader sr = new StreamReader(fs, Encoding.UTF8);
+                    StreamWriter sw = new StreamWriter(fs, Encoding.UTF8);
+
+                    //Deserialise the JSON
+                    raid = JsonConvert.DeserializeObject<Raid>(sr.ReadToEnd());
+
+                    //Reset the stream
+                    fs.Seek(0, SeekOrigin.Begin);
+                    fs.SetLength(0);
+
+                    //Change the description
+                    raid.description = description;
+
+                    //Serialise the Raid object
+                    sw.Write(JsonConvert.SerializeObject(raid, Formatting.Indented));
+                    sw.Flush();
+                }
+            });
+        }
+
+        public static bool MoveRaid(RaidHandle handle, DateTimeOffset newOffset)
+        {
+            //Catch any errors
+            return Debug.Try(() =>
+            {
+                //Get the timestamp
+                var timestamp = newOffset.ToUnixTimeSeconds();
+
+                //Determine the folder name
+                var name = $"raid_{timestamp}_{handle.raid_id}";
+
+                //Get the raid data
+                var data = GetRaidData(handle).Value;
+
+                //Change the time
+                data.timestamp = timestamp;
+
+                //Create directory for the raid
+                Directory.CreateDirectory($"./raids/{name}/");
+
+                //Create the new raid file
+                using (var sw = File.CreateText($"./raids/{name}/raid.json"))
+                {
+                    //Serialise the Raid object
+                    sw.Write(JsonConvert.SerializeObject(data, Formatting.Indented));
+                    sw.Flush();
+                }
+
+                //Delete the old raid
+                DeleteRaid(handle);
+            });
+        }
+
         private static RaidHandle? CreateNewRaidHandle(DateTimeOffset offset)
         {
             //Catch any errors
