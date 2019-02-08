@@ -192,7 +192,7 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
                     //Parse JSON and return the UploadResponse object
                     return JsonConvert.DeserializeObject<UploadResponse>(response);
                 }
-            }, default);
+            }, null);
         }
 
         public PollResponse Poll()
@@ -252,7 +252,7 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
                     //Return the parsed object
                     return obj;
                 }
-            }, default);
+            }, null);
         }
 
         private int lastid = 0;

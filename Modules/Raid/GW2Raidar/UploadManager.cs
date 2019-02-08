@@ -81,8 +81,8 @@ namespace DiscordBot.Modules.Raid.GW2Raidar
                     //Poll the server
                     var ret = this.client.Poll();
 
-                    //Break if the return value is null
-                    if (ret == null) break;
+                    //Retry if poll failed
+                    if (ret == null) continue;
 
                     //Check if we have any notifications
                     if ((ret.notifications?.Count ?? 0) > 0)
