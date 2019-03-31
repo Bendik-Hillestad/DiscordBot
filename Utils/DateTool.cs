@@ -52,7 +52,7 @@ namespace DiscordBot.Utils
         public static int GetDefaultTimezone()
         {
             //TODO: Actually figure this shit out
-            return 1;
+            return 2;
         }
     }
 }
