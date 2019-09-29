@@ -9,18 +9,18 @@ jobs:
   build:
 
     runs-on: ubuntu-16.04
-
+    
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@master
       with:
         submodules: true
-
+    
     - run: echo "{ \"hello\": \"there\" }" > config.json
-
+    
     - run: mkdir -p build/release
-
+    
     - run: dotnet publish -c Release -r ubuntu.16.04-x64 -o ./build/release/
-
+    
     - uses: actions/upload-artifact@master
       with:
         name: build-artifacts
