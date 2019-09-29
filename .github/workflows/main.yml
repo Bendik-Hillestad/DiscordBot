@@ -16,7 +16,7 @@ jobs:
         submodules: true
     
     - name: Make dummy config
-      run: echo "{ \"hello\": \"there\" }" > config.json
+      run: echo { } > config.json
     
     - name: Create build directory
       run: mkdir -p build/release
