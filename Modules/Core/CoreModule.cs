@@ -3,6 +3,7 @@
 using Discord;
 
 using DiscordBot.Commands;
+using DiscordBot.Utils;
 
 namespace DiscordBot.Modules.Core
 {
@@ -19,18 +20,21 @@ namespace DiscordBot.Modules.Core
             //Get UTC+0
             var utcNow = DateTimeOffset.UtcNow;
 
-            //FIXME: Check for DST
-            bool dst = true;//DateTime.Now.IsDaylightSavingTime();
+            //Get the current timezone identifier
+            var timezone = TzInfo.GetCurrentZone();
 
-            //Reliably get the actual time
-            var now = utcNow.AddHours(dst ? 2 : 1);
+            //Get the current offset
+            var offset = TzInfo.GetCurrentOffset();
+
+            //Get the local time
+            var now = utcNow.AddMinutes(offset);
 
             //Setup the embed builder
             var builder = new EmbedBuilder().WithColor(Color.Blue);
 
             //Add times
-            var embed = builder.AddInlineField( "Servertime:",        $"{utcNow:HH:mm}")
-                               .AddInlineField($"CE{(dst?"S":"")}T:", $"{now:HH:mm}")
+            var embed = builder.AddInlineField( "Servertime:", $"{utcNow:HH:mm}")
+                               .AddInlineField($"{timezone}:", $"{now:HH:mm}")
                                .WithFooter    ( "Local time:").WithTimestamp(utcNow);
 
             //Send the message
