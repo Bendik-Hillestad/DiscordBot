@@ -271,7 +271,7 @@ namespace DiscordBot.Core
                         this.context = (msg.Channel as SocketGuildChannel)?.Guild;
 
                         //Get all lines starting with one of !#$ followed by a command
-                        var matches = Regex.Matches(msg.Content, @"^[\!\#\$](\w+)", RegexOptions.Multiline);
+                        var matches = Regex.Matches(msg.Content, @"^[\!\#\$\@](\w+)", RegexOptions.Multiline);
 
                         //Iterate through the matches
                         for (int i = 0; i < matches.Count; i++)
