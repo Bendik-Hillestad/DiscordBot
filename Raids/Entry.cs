@@ -1,17 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿#nullable enable
 
 namespace DiscordBot.Raids
 {
-    public struct Entry
+    internal struct Entry
     {
-        public ulong?       user_id   { get; set; }
-        public string       user_name { get; set; }
-        public bool         backup    { get; set; }
-        public List<string> roles     { get; set; }
+        public ulong?   user_id;
+        public string   user_name;
+        public bool     backup;
+        public string[] roles;
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             //Cast to Entry
             var tmp = obj as Entry?;

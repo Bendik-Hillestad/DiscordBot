@@ -3,9 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
@@ -22,9 +19,6 @@ namespace DiscordBot.Modules.Raid
 {
     public partial class RaidModule : CommandModule<RaidModule>
     {
-        [DllImport("libherrington")]
-        private static extern void solve(uint idx, IntPtr users, int length, IntPtr output);
-
         private void raid_create_impl(Context ctx, int day, int month, int year, int hours, int minutes, int offset, string description)
         {
             //Get the date
@@ -73,7 +67,7 @@ namespace DiscordBot.Modules.Raid
             var handle = RaidManager.GetRaidFromID(id).Value;
 
             //Extract the roles to create our filter
-            var filter = this.GetRoles(roles);
+            var filter = this.raidConfig.MatchRoles(roles);
 
             //Get the raiders that match the filter
             var roster = RaidManager.CoalesceRaiders(handle)
@@ -113,15 +107,62 @@ namespace DiscordBot.Modules.Raid
             }
         }
 
+        private void raid_aliases_add_impl(Context ctx, string key, string value)
+        {
+            //Check if the alias exists
+            if (this.raidConfig.HasAlias(key))
+            {
+                //Update the alias
+                this.raidConfig.UpdateAlias(key, value);
+
+                //Return success
+                Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
+                    "Success", $"Alias updated to '{key} => {value}'."
+                );
+            }
+            else
+            {
+                //Add the alias
+                this.raidConfig.AddAlias(key, value);
+
+                //Return success
+                Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
+                    "Success", $"Alias '{key} => {value}' created."
+                );
+            }
+        }
+
+        private void raid_aliases_remove_impl(Context ctx, string key)
+        {
+            //Remove the alias
+            this.raidConfig.RemoveAlias(key);
+
+            //Return success
+            Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
+                "Success",
+                $"Alias '{key}' removed."
+            );
+        }
+
+        private void raid_aliases_impl(Context ctx)
+        {
+            //Get all the aliases we recognize
+            var aliases = this.raidConfig.Aliases;
+
+            //Display the aliases
+            Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
+                "Aliases:", string.Join("\n", aliases.Select(kv => $"{kv.Key.ToUpper()} => {kv.Value.ToUpper()}"))
+            );
+        }
+
         private void raid_roles_impl(Context ctx)
         {
             //Get all the roles we recognize
-            var roles = this.raidConfig.GetAllRoles();
+            var roles = this.raidConfig.Roles;
 
             //Display the roles
             Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
-                "Roles:",
-                string.Join(", ", roles)
+                "Roles:", string.Join(", ", roles)
             );
         }
 
@@ -162,18 +203,11 @@ namespace DiscordBot.Modules.Raid
             var handle = RaidManager.GetRaidFromID(id).Value;
 
             //Extract the roles
-            var extractedRoles = this.GetRoles(roles);
-            bool bu = false;
-
-            //Check if one of the roles is BACKUP
-            if (roles.ToUpper().Contains("BACKUP"))
-            {
-                //Set flag
-                bu = true;
-            }
+            var extractedRoles = this.raidConfig.MatchRoles(roles);
+            bool bu = roles.ToUpper().Contains("BACKUP");
 
             //Check that we got any roles
-            Precondition.Assert(extractedRoles.Count > 0, "No recognized roles provided!");
+            Precondition.Assert(extractedRoles.Length > 0, "No recognized roles provided!");
 
             //Add to the raid
             RaidManager.AppendRaider(handle, ctx.message.Author.Id, bu, extractedRoles);
@@ -205,18 +239,11 @@ namespace DiscordBot.Modules.Raid
             var handle = RaidManager.GetRaidFromID(id).Value;
 
             //Extract the roles
-            var extractedRoles = this.GetRoles(roles);
-            bool bu = false;
-
-            //Check if one of the roles is BACKUP
-            if (roles.ToUpper().Contains("BACKUP"))
-            {
-                //Set flag
-                bu = true;
-            }
+            var extractedRoles = this.raidConfig.MatchRoles(roles);
+            bool bu = roles.ToUpper().Contains("BACKUP");
 
             //Check that we got any roles
-            Precondition.Assert(extractedRoles.Count > 0, "No recognized roles provided!");
+            Precondition.Assert(extractedRoles.Length > 0, "No recognized roles provided!");
 
             //Add to the raid
             RaidManager.AppendRaider(handle, name, bu, extractedRoles);
@@ -254,100 +281,82 @@ namespace DiscordBot.Modules.Raid
                );
         }
 
-        private void raid_make_comp_impl(Context ctx, string compName, int id)
+        private void raid_make_comp_impl(Context ctx, RaidHandle handle, /*readonly*/ string[] layout)
         {
-            //Get a handle to the raid
-            var handle = RaidManager.GetRaidFromID(id).Value;
-
-            //Find the comp
-            var compIdx = this.raidConfig.GetCompIndex(compName.ToUpper());
-
-            //Check if valid
-            Precondition.Assert
-            (
-                compIdx != -1,
-                "No comp with that name. These are the recognised comps: \n" +
-                string.Join(", ", this.raidConfig.GetCompNames())
-            );
+            //Get the raiders
+            var raiders = RaidManager.CoalesceRaiders(handle);
 
             //Generate composition
-            var bestComp = this.GenerateComp(handle, compIdx, out var unused);
-
-            //Prepare the categories
-            var categories = this.raidConfig.GetRoleCounts(compIdx)
-                                            .Where (val => val.Value > 0)
-                                            .ToList();
+            var result = this.GenerateComp(raiders, layout, out Entry[] unused);
 
             //Setup the embed builder
             var builder = new EmbedBuilder().WithColor(Color.Blue);
 
+            //Get the unique roles in this composition
+            var roles = layout.Distinct().ToArray();
 
-            //Iterate over the categories
-            var offset = 0;
-            categories.ForEach(c =>
+            //Go through each role
+            foreach (var r in roles)
             {
-                //Get title
-                var title = $"{c.Key}:";
+                //Count the instances of this role in the layout
+                var roleCount = layout.Count(str => r == str);
 
-                //Get all the members in this category
-                var members = bestComp.Skip(offset).Take(c.Value).Select(e =>
+                //Get all players with this assigned role
+                var players = result.Where(p => p.assignment == r);
+
+                //Format the names
+                var formatted = players.Select(p =>
                 {
-                    //Check that it's not null
-                    if (e.HasValue)
+                    //Get the name of the player
+                    var name = (p.player.user_id.HasValue ? Bot.GetBotInstance().GetUserName(p.player.user_id.Value) : p.player.user_name);
+
+                    //Check if backup
+                    if (p.player.backup)
                     {
-                        //Get the entry
-                        var entry = e.Value;
-
-                        //Check if this entry is a backup
-                        if (entry.backup)
-                        {
-                            //Return the name with cursive text
-                            return "*" + ((entry.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(entry.user_id.Value)
-                                                                   : entry.user_name) + "*";
-                        }
-
-                        //Return the name with normal text
-                        return (entry.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(entry.user_id.Value)
-                                                        : entry.user_name;
+                        //Add cursive
+                        return $"*{name}*";
                     }
+                    else return name;
+                }).ToArray();
 
-                    //Just fill in with empty
-                    return "<empty>";
-                });
+                //Check that it's not empty
+                if (formatted.Length > 0)
+                {
+                    //Write the formatted names
+                    builder = builder.AddField($"{r} ({formatted.Length}/{roleCount}):", string.Join('\n', formatted));
+                }
+                else
+                {
+                    //Add an empty field
+                    builder = builder.AddField($"{r} (0/{roleCount}):", "...");
+                }
+            }
+
+            //Check if we need to add a "not included" category
+            if (unused.Length > 0)
+            {
+                //Format the names
+                var formatted = unused.Select(p =>
+                {
+                    //Get the name of the player
+                    var name = (p.user_id.HasValue ? Bot.GetBotInstance().GetUserName(p.user_id.Value) : p.user_name);
+
+                    //Check if backup
+                    if (p.backup)
+                    {
+                        //Add cursive
+                        return $"*{name}*";
+                    }
+                    else return name;
+                }).ToArray();
 
                 //Add the field
-                builder = builder.AddField(title, string.Join("\n", members));
-
-                //Update offset
-                offset += c.Value;
-            });
-
-            //Check if we need to add an "not included" category
-            if (unused.Count > 0)
-            {
-                //Get the names of the entries
-                var names = unused.Select(e =>
-                {
-                    //Check if this entry is a backup
-                    if (e.backup)
-                    {
-                        //Return the name with cursive text
-                        return "*" + ((e.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(e.user_id.Value)
-                                                           : e.user_name) + "*";
-                    }
-
-                    //Return the name with normal text
-                    return ((e.user_id.HasValue) ? Bot.GetBotInstance().GetUserName(e.user_id.Value)
-                                                 : e.user_name);
-                });
-
-                //Add the field
-                builder = builder.AddField("Not included:", string.Join("\n", names));
+                builder = builder.AddField("Not included:", string.Join('\n', formatted));
             }
 
             //Build the embed
             var embed = builder.WithTitle("This is the best comp I could make:")
-                               .Build    ();
+                               .Build();
 
             //Send the message
             ctx.message.Channel.SendMessageAsync("", false, embed).GetAwaiter().GetResult();
@@ -356,55 +365,26 @@ namespace DiscordBot.Modules.Raid
         private void raid_create_comp_impl(Context ctx, string name, string roles)
         {
             //Get all the roles (including duplicates)
-            var comp = Regex.Matches(roles, @"\w+")
-                            .Select (r => r.Value.ToUpper())
-                            .ToList ();
+            var layout = Regex.Matches(roles, @"\w+")
+                              .Select (r => r.Value.ToUpper())
+                              .ToArray();
 
             //Check that we got a comp
-            Precondition.Assert(comp.Count > 0, "No roles provided!");
+            Precondition.Assert(layout.Length > 0, "No roles provided!");
 
-            //Add the comp description
-            this.raidConfig.AddCompDescription(new CompDescription
-            {
-                Name   = name.ToUpper(),
-                Layout = comp
-            });
+            //Add the composition
+            this.raidConfig.AddComposition(name.ToUpper(), layout);
 
-            //Save and compile
-            bool success = Debug.Try(() =>
-            {
-                this.raidConfig.SaveConfig();
-                this.raidConfig.GenerateSolverLibrary();
-            });
-
-            //Check result
-            if (success)
-            {
-                //Send success message
-                Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
-                    "Success", "Comp was created."
-                );
-            }
-            else
-            {
-                //Send error message
-                Bot.GetBotInstance().SendErrorMessage(ctx.message.Channel,
-                    "Error", "There was an error #blamearnoud."
-                );
-            }
+            //Send success message
+            Bot.GetBotInstance().SendSuccessMessage(ctx.message.Channel,
+                "Success", "Comp was created."
+            );
         }
 
-        private void raid_delete_comp_impl(Context ctx, int compIdx)
+        private void raid_delete_comp_impl(Context ctx, string comp)
         {
             //Delete the raid
-            this.raidConfig.Compositions.RemoveAt(compIdx);
-
-            //Save the config and recompile
-            Debug.Try(() =>
-            {
-                this.raidConfig.SaveConfig();
-                this.raidConfig.GenerateSolverLibrary();
-            });
+            this.raidConfig.RemoveComposition(comp);
         }
 
         private void raid_show_comps_impl(Context ctx)
@@ -416,11 +396,11 @@ namespace DiscordBot.Modules.Raid
             var builder = new EmbedBuilder().WithColor(Color.Blue);
 
             //Go through each composition we have
-            this.raidConfig.Compositions.ForEach(c =>
+            foreach (var kv in this.raidConfig.Compositions)
             {
                 //Add the comp
-                builder = builder.AddField(c.Name, string.Join(", ", c.Layout));
-            });
+                builder = builder.AddField(kv.Key, string.Join(", ", kv.Value));
+            }
 
             //Build the embed
             var embed = builder.Build();
@@ -615,163 +595,52 @@ namespace DiscordBot.Modules.Raid
             return builder.WithFooter(footer).Build();
         }
 
-        private List<string> GetRoles(string roleList)
+        private readonly struct PlayerAssignment
         {
-            //Create our regex
-            var regex = this.raidConfig
-                            .GetAllRoles      ()
-                            .OrderByDescending(s => s.Length)
-                            .Aggregate        ((s, s2) => s + "|" + s2);
-
-            //Check for matches
-            return Regex.Matches (roleList, regex, RegexOptions.IgnoreCase)
-                        .Select  (r => r.Value.ToUpper())
-                        .Distinct().ToList();
-        }
-
-        private Dictionary<string, float> GetRoleWeights(Entry e, int compIdx)
-        {
-            //Filter the user's roles based on what this comp needs
-            var roles = e.roles.Intersect(this.raidConfig.GetRolesForComp(compIdx));
-
-            //Calculate the weights
-            var weights = new Dictionary<string, float>();
-            roles.Select((r, i) =>
+            public PlayerAssignment(Entry player, string assignment)
             {
-                if (i == 0) return new KeyValuePair<string, float>(r, 1.5f);
-                else        return new KeyValuePair<string, float>(r, 1.0f);
-            }).ToList().ForEach(w => weights.Add(w.Key, w.Value));
-
-            //Return the weights
-            return weights;
-        }
-
-        private static ulong HashEntry(Entry e)
-        {
-            unchecked
-            {
-                //Prepare the hash with the FNV offset basis 
-                ulong hash = 14695981039346656037;
-
-                //Perform the main FNV-1a hash routine
-                foreach (char c in e.user_name)
-                {
-                    hash = hash ^ c;
-                    hash = hash * 1099511628211;
-                }
-
-                //Return the resulting hash value
-                return hash;
-            }
-        }
-
-        private Entry?[] MakeRaidComp(in List<Entry> raiders, int compIdx)
-        {
-            //Get the roles
-            var roles     = this.raidConfig.GetAllRoles();
-
-            //Get the size of the composition
-            var compSize  = this.raidConfig.Compositions[compIdx].Layout.Count;
-
-            //Allocate an array to hold the data that we feed into the solver
-            var userSize  = this.raidConfig.GetUserSizeInBytes();
-            var input     = Marshal.AllocHGlobal(userSize * raiders.Count);
-
-            //Allocate an array to hold the output data
-            var blockSize = this.raidConfig.GetOutputBlockSizeInBytes();
-            var output    = Marshal.AllocHGlobal(blockSize * compSize);
-
-            //Iterate through the raiders
-            var offset = input; var idx = 0;
-            raiders.ForEach(r =>
-            {
-                //Get the user id
-                var id = r.user_id;
-
-                //Check if we don't have a user id
-                if (!r.user_id.HasValue)
-                {
-                    //Create a temporary id (we pray for no hash collision)
-                    id = HashEntry(r);
-                }
-
-                //Write the id into the array
-                Marshal.WriteInt64(offset, (Int64)id.Value);
-                var next = offset + userSize;
-                offset  += sizeof(ulong);
-
-                //Get the role weights
-                var weights = this.GetRoleWeights(r, compIdx);
-
-                //Calculate a bias by squashing the join index into the [0, 1] range
-                float bias = 1.0f - (idx / (idx + 2.0f * compSize));
-
-                //Iterate through the roles
-                roles.ForEach(role =>
-                {
-                    //Get the weight for this role
-                    float weight = weights.GetValueOrDefault(role);
-
-                    //Adjust the weight
-                    weight = weight * bias;
-
-                    //Write the weight into the array
-                    Marshal.WriteInt32(offset, BitConverter.SingleToInt32Bits(weight));
-                    offset += sizeof(float);
-                });
-
-                //Update offset and index
-                offset = next; idx++;
-            });
-
-            //Feed values to the solver
-            solve((uint)compIdx, input, raiders.Count, output);
-
-            //Prepare result
-            var result = new Entry?[compSize];
-
-            //Iterate over the output array
-            offset = output;
-            for (int i = 0; i < compSize; i++)
-            {
-                //Get the id
-                var id = (ulong)Marshal.ReadInt64(output + (i * blockSize));
-
-                //Check that it's not zero
-                if (id != 0)
-                {
-                    //Insert the right raider
-                    result[i] = raiders.Find(r => (r.user_id.HasValue) ? (r.user_id.Value == id) : (HashEntry(r) == id));
-                }
-                else result[i] = null;
+                this.player     = player;
+                this.assignment = assignment;
             }
 
-            //Release our unmanaged memory
-            Marshal.FreeHGlobal(input);
-            Marshal.FreeHGlobal(output);
-
-            //Return the result
-            return result;
+            public readonly Entry  player;
+            public readonly string assignment;
         }
 
-        private Entry?[] GenerateComp(RaidHandle handle, int compIdx, out List<Entry> unused)
+        private PlayerAssignment[] GenerateComp(/*readonly*/ Entry[] roster, ReadOnlySpan<string> layout, out Entry[] unused)
         {
-            //Get the raiders
-            var raiders = RaidManager.CoalesceRaiders(handle);
+            //Move backups to the end using a stable sort
+            var finalRoster = Enumerable.OrderBy(roster, e => e.backup).ToArray();
 
-            //Move backups to the end
-            raiders = raiders.Where (e => !e.backup)
-                             .Union (raiders.Where(e => e.backup))
-                             .ToList();
+            //Get all recognized roles
+            var roles = this.raidConfig.Roles.ToArray();
 
-            //Send to solver
-            var comp = this.MakeRaidComp(raiders, compIdx);
+            //Transform the layout into a representation our optimizer accepts
+            var composition = Optimizer.PrepareComposition(layout, roles);
 
-            //Get anyone that is not included
-            unused = raiders.Where(e => !comp.Contains(e)).ToList();
+            //Transform the roster into a representation our optimizer accepts
+            var processedRoster = Optimizer.PrepareRoster(finalRoster, roles);
 
-            //Return the comp
-            return comp;
+            //Send to the optimizer
+            var result = Optimizer.Optimize(composition, processedRoster);
+            if (result.Length > 0)
+            {
+                //Map the result back into something we can understand
+                var processedResult = result.Select (x => new PlayerAssignment(finalRoster[x.id], roles[(int)x.role]))
+                                .ToArray();
+
+                //Get anyone that is not included in the result
+                var used = processedResult.Select(x => x.player).ToArray();
+                unused = finalRoster.Where(e => !used.Contains(e)).ToArray();
+
+                //Return the result
+                return processedResult;
+            }
+            else
+            {
+                unused = finalRoster;
+                return Array.Empty<PlayerAssignment>();
+            }
         }
     }
 }

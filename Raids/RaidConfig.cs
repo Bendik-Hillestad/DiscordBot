@@ -1,70 +1,189 @@
-﻿using System.IO;
-using System.Collections.Generic;
+﻿using System;
+using System.IO;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Diagnostics;
+using System.Collections.Generic;
 
 using Newtonsoft.Json;
-
 using DiscordBot.Utils;
+using System.Text.RegularExpressions;
+
+#nullable enable
 
 namespace DiscordBot.Raids
 {
-    public sealed class CompDescription
+    internal sealed class RaidConfig
     {
-        public string       Name   { get; set; }
-        public List<string> Layout { get; set; }
-    }
-
-    public sealed class RaidConfig
-    {
-        public static RaidConfig DefaultConfig = new RaidConfig
+        private static readonly RaidConfig DefaultConfig = new RaidConfig
         {
-            Compositions = new List<CompDescription>
+            compositions = new Dictionary<string, string[]>
             {
-                new CompDescription
                 {
-                    Name   = "DEFAULT",
-                    Layout = new List<string>
+                    "DEFAULT",
+                    new string[]
                     {
-                        "MES", "HEAL", "DPS", "DPS", "SLAVE",
-                        "MES", "HEAL", "DPS", "DPS", "DPS"
+                        "CHRONO", "HEALER", "DPS", "DPS", "SLAVE",
+                        "CHRONO", "HEALER", "DPS", "DPS", "DPS"
+                    }
+                },
+
+                {
+                    "DEIMOS",
+                    new string[]
+                    {
+                        "CHRONO", "HEALER", "DPS", "SLAVE",
+                        "CHRONO", "HEALER", "DPS", "DPS", "DPS",
+                        "KITER"
+                    }
+                },
+
+                {
+                    "FIREBRIGADE",
+                    new string[]
+                    {
+                        "CHRONO",     "ALACRIGADE", "SLAVE", "DPS", "DPS",
+                        "QUICKBRAND", "HEALER",     "DPS",   "DPS", "DPS"
                     }
                 }
+            },
+
+            aliases = new Dictionary<string, string>()
+            {
+                { "MES",   "CHRONO" },
+                { "HEAL",  "HEALER" },
+                { "DRUID", "HEALER" },
+                { "QFB",   "QUICKBRAND" },
+                { "AREN",  "ALACRIGADE" }
             }
         };
 
-        public List<CompDescription> Compositions { get; set; }
+        public RaidConfig()
+        {
+            this.compositions = new Dictionary<string, string[]>();
+            this.roles        = new HashSet<string>();
+            this.aliases      = new Dictionary<string, string>();
+        }
+
+
+        public IReadOnlyDictionary<string, string[]> Compositions => this.compositions;
+
+        [JsonIgnore]
+        public IReadOnlyCollection<string> Roles => this.roles;
+
+        public IReadOnlyDictionary<string, string> Aliases => this.aliases;
 
         public static RaidConfig ReadConfig()
         {
-            //Check if the config exists
+            RaidConfig? config;
+
+            //Check if a config exists
             if (File.Exists("raid_config.json"))
             {
                 //Read the file
                 var text = File.ReadAllText("raid_config.json");
 
-                //Deserialize and return
-                return JsonConvert.DeserializeObject<RaidConfig>(text);
+                //Deserialize it
+                config = JsonConvert.DeserializeObject<RaidConfig>(text);
             }
             else
             {
-                //Load a default composition
-                return RaidConfig.DefaultConfig;
+                //Load the default configuration
+                config = RaidConfig.DefaultConfig;
+
+                //Save the configuration
+                Debug.Try(() => config.SaveConfig());
             }
+
+            //Regenerate the roles
+            config.RegenerateRoles();
+
+            //Remove any unused aliases
+            config.RemoveUnusedAliases();
+
+            //Return it
+            return config;
         }
 
-        public void AddCompDescription(CompDescription description)
+        public void AddComposition(string name, string[] layout)
         {
-            //Make sure one with this name does not already exist
-            this.Compositions.RemoveAll(other => string.Equals(description.Name, other.Name));
+            //Add the composition
+            this.compositions.Add(name.ToUpper(), layout);
 
-            //Add composition description
-            this.Compositions.Add(description);
+            //Update the roles
+            this.RegenerateRoles();
+
+            //Save the configuration
+            Debug.Try(() => this.SaveConfig());
         }
 
-        public void SaveConfig()
+        public void RemoveComposition(string name)
+        {
+            //Remove the composition
+            this.compositions.Remove(name.ToUpper());
+
+            //Update the roles
+            this.RegenerateRoles();
+
+            //Remove any unused aliases
+            this.RemoveUnusedAliases();
+
+            //Save the configuration
+            Debug.Try(() => this.SaveConfig());
+        }
+
+        public bool HasRole(string role)
+        {
+            //Return whether the role exists or not
+            return this.roles.Contains(role);
+        }
+
+        public bool HasAlias(string key)
+        {
+            //Return whether the key exists or not
+            return this.aliases.ContainsKey(key.ToUpper());
+        }
+
+        public void AddAlias(string key, string value)
+        {
+            //Add the alias
+            this.aliases.Add(key.ToUpper(), value.ToUpper());
+
+            //Save the configuration
+            Debug.Try(() => this.SaveConfig());
+        }
+
+        public void UpdateAlias(string key, string value)
+        {
+            //Update the alias
+            this.aliases[key.ToUpper()] = value.ToUpper();
+
+            //Save the configuration
+            Debug.Try(() => this.SaveConfig());
+        }
+
+        public void RemoveAlias(string key)
+        {
+            //Remove the alias
+            this.aliases.Remove(key.ToUpper());
+
+            //Save the configuration
+            Debug.Try(() => this.SaveConfig());
+        }
+
+        public string[] MatchRoles(string input)
+        {
+            //Create our regex
+            var regex = this.roles.Union(this.aliases.Keys)
+                                  .OrderByDescending(str => str.Length)
+                                  .Aggregate((l, r) => $"{l}|{r}");
+
+            //Get the matches
+            return Regex.Matches (input, regex, RegexOptions.IgnoreCase)
+                        .Select  (m => m.Value.ToUpper())
+                        .Select  (str => this.aliases.ContainsKey(str) ? this.aliases[str] : str)
+                        .Distinct().ToArray();
+        }
+
+        private void SaveConfig()
         {
             //Open/Create the file
             using (FileStream fs = File.Open("raid_config.json", FileMode.Create, FileAccess.Write, FileShare.None))
@@ -81,217 +200,47 @@ namespace DiscordBot.Raids
             }
         }
 
-        public void GenerateSolverLibrary()
+        private void RegenerateRoles()
         {
-            //Calculate unique roles
-            var roles = this.GetAllRoles();
+            this.roles.Clear();
 
-            //Prepare the string to hold the final code
-            string code = "";
-
-            //Emit our includes
-            code += "#include \"platform.h\"\n" +
-                    "#include \"typelist.h\"\n" +
-                    "#include \"solver.h\"\n\n" +
-                    "#include <cstring>\n\n";
-
-            //Begin our implementation namespace
-            code += "namespace billy_herrington::impl {\n";
-
-            //Emit our roles
-            code += string.Join("\n", roles.Select((r) => $"struct {r};"));
-            code += "\n\n";
-            code += $"using roles = tl::typelist_t<{string.Join(",", roles)}>;\n";
-            code += "\n";
-
-            //Iterate through the different compositions
-            foreach (var comp in this.Compositions)
+            //Go through each composition
+            foreach (ReadOnlySpan<string> comp in this.Compositions.Values)
             {
-                //Begin the namespace for this comp
-                code += $"namespace {comp.Name} {{\n";
+                //Go through each role in the comp
+                foreach (string role in comp)
+                {
+                    //Add it to the hash set to get all the unique roles
+                    this.roles.Add(role);
+                }
+            }
+        }
 
-                //Emit the composition layout
-                code += $"using composition = tl::typelist_t<{string.Join(",", comp.Layout)}>;\n";
-                code += "\n";
+        private void RemoveUnusedAliases()
+        {
+            List<string> unused = new List<string>();
 
-                //Emit the template
-                code += "#include \"implementation_template.h\"\n";
-
-                //End the namespace for this comp
-                code += "};\n";
+            //Go through each alias
+            foreach (var kv in this.aliases)
+            {
+                //Check if the corresponding role is not used
+                if (!this.roles.Contains(kv.Value))
+                {
+                    //Add the alias to the list
+                    unused.Add(kv.Key);
+                }
             }
 
-            //End the implementation namespace
-            code += "};\n\n";
-
-            //Begin our public API
-            code += "BILLY_HERRINGTON_API void solve(unsigned int impl, void* roster, int length, void* output) {\n";
-            code += "using namespace billy_herrington::impl;\n\n";
-
-            //Begin the switch
-            code += "switch (impl) {\n";
-
-            //Iterate through the different compositions
-            int n = 0;
-            foreach (var comp in this.Compositions)
+            //Go through the unused aliases
+            foreach (string str in unused)
             {
-                //Begin the case
-                code += $"case {n}: {{\n";
-
-                //Emit the function call
-                code += $"{comp.Name}::solve" +
-                         "(" +
-                            $"static_cast<{comp.Name}::solver_config::roster_t::const_pointer>(roster), " +
-                             "length, " +
-                            $"static_cast<{comp.Name}::solver_config::comp_t::pointer>(output)" +
-                         ");\n";
-
-                //End the case
-                code += "} break;\n\n";
-
-                //Increment the counter
-                n++;
+                //Remove it from our dictionary
+                this.aliases.Remove(str);
             }
-
-            //End the switch
-            code += "}\n";
-
-            //End the public API
-            code += "}\n\n";
-
-            //Begin our compiler guard
-            code += "#if defined(_MSC_VER) && !(defined(__c2__) || defined(__clang__) || defined(__GNUC__))\n";
-            code += "\n";
-
-            //Emit the entry-point
-            code += "#define WIN32_LEAN_AND_MEAN\n" +
-                    "#define VC_EXTRALEAN\n" +
-                    "#include <windows.h>\n" +
-                    "\n" +
-                    "BOOL APIENTRY DllMain(HMODULE, DWORD, LPVOID) {\n" +
-                        "return TRUE;\n" +
-                    "}\n\n";
-
-            //End the compiler guard
-            code += "#endif\n";
-
-            //Create the source file
-            File.WriteAllText("./libherrington/dllmain.cpp", code);
-
-            //For easier debugging, format the text
-#           if DEBUG
-            Process.Start(new ProcessStartInfo
-            {
-                FileName               = "clang-format",
-                Arguments              = "-style=file " +
-                                         "-i " +
-                                         "./libherrington/dllmain.cpp",
-                UseShellExecute        = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError  = true
-            });
-#           endif
-
-            Utility.WithRetry((i) => Utils.Debug.Try(() =>
-            {
-                //Sleep between retries
-                if (i > 0) Thread.Sleep(100);
-
-                //Delete the previous library just in case
-                if (File.Exists("libherrington.so")) File.Delete("libherrington.so");
-
-                //Compile the code
-                var clang = Process.Start(new ProcessStartInfo
-                {
-                    FileName               = "clang",
-                    Arguments              = "-std=c++17 -fPIC -shared -fno-exceptions -fno-rtti -O3 " +
-                                             "-march=native -fvisibility=hidden -fvisibility-inlines-hidden " +
-                                             "-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic " +
-                                             "-Wno-padded -Wno-missing-prototypes ./libherrington/dllmain.cpp " +
-                                             "-o libherrington.so",
-                    UseShellExecute        = false,
-                    RedirectStandardOutput = false,
-                    RedirectStandardError  = true
-                });
-
-                //Dump output (Not reading the error stream causes trouble with outputting the shared object)
-                Task.Run(async () =>
-                {
-                    using (FileStream fs = new FileStream("clang_error.txt", FileMode.Create))
-                    {
-                        await clang.StandardError.BaseStream.CopyToAsync(fs);
-                    }
-                }).GetAwaiter().GetResult();
-
-                //Make sure that clang actually exited
-                if (!clang.HasExited) clang.WaitForExit();
-
-                //Check that the file was generated
-                Utils.Debug.Assert(File.Exists("libherrington.so"), "Failed to create shared object.");
-            }), 10);
         }
 
-        public List<KeyValuePair<string, int>> GetRoleCounts(int compIdx)
-        {
-            //Find the comp
-            var comp = this.Compositions.ElementAt(compIdx).Layout;
-
-            //Count the occurrences of the roles in this comp
-            return this.GetAllRoles()
-                       .Select(r =>
-                       {
-                           return new KeyValuePair<string, int>
-                           (
-                               r,
-                               comp.Count(s => string.Equals(r, s))
-                           );
-                       })
-                       .ToList();
-        }
-
-        public List<string> GetAllRoles()
-        {
-            return this.Compositions
-                       .Select   ((desc) => desc.Layout.Distinct())
-                       .Aggregate((i, j) => i.Union(j))
-                       .ToList   ();
-        }
-
-        public List<string> GetRolesForComp(int compIdx)
-        {
-            return this.Compositions
-                       .Select   (desc => desc.Layout.Distinct())
-                       .ElementAt(compIdx)
-                       .ToList   ();
-        }
-
-        public List<string> GetCompNames()
-        {
-            return this.Compositions
-                       .Select(desc => desc.Name)
-                       .ToList();
-        }
-
-        public int GetCompIndex(string name)
-        {
-            return this.Compositions
-                       .FindIndex(c => string.Equals(c.Name, name));
-        }
-
-        //TODO: These should probably be queried from the library
-
-        public int GetUserSizeInBytes()
-        {
-            //First calculate the base size
-            var baseSize = sizeof(ulong) + sizeof(float) * this.GetAllRoles().Count;
-
-            //Add padding so that the total size is some multiple of sizeof(ulong)
-            return (baseSize + sizeof(ulong) - 1) & ~(sizeof(ulong) - 1);
-        }
-
-        public int GetOutputBlockSizeInBytes()
-        {
-            return 16;
-        }
+        private Dictionary<string, string[]> compositions;
+        private HashSet<string> roles;
+        private Dictionary<string, string> aliases;
     }
 }

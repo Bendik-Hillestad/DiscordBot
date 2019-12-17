@@ -14,6 +14,9 @@ jobs:
     - uses: actions/checkout@master
       with:
         submodules: true
+    - uses: actions/setup-dotnet@master
+      with:
+        dotnet-version: '3.0.100'
     
     - name: Make dummy config
       run: echo { } > config.json
@@ -22,7 +25,7 @@ jobs:
       run: mkdir -p build/release
     
     - name: Build
-      run: dotnet publish -c Release -r ubuntu.16.04-x64 -o ./build/release/
+      run: dotnet publish -c Release -r ubuntu.16.04-x64 -o ./build/release/ /p:PublishSingleFile=true /p:PublishTrimmed=true /p:DebugType=None
     
     - uses: actions/upload-artifact@master
       with:

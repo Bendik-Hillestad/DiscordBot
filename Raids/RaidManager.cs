@@ -12,23 +12,23 @@ using Newtonsoft.Json;
 
 namespace DiscordBot.Raids
 {
-    public struct RaidHandle
+    internal struct RaidHandle
     {
         public string full_name;
         public long   timestamp;
         public int    raid_id;
     }
 
-    public struct Raid
+    internal struct Raid
     {
-        public ulong       owner_id    { get; set; }
-        public int         raid_id     { get; set; }
-        public long        timestamp   { get; set; }
-        public string      description { get; set; }
-        public List<Entry> roster      { get; set; }
+        public ulong       owner_id;
+        public int         raid_id;
+        public long        timestamp;
+        public string      description;
+        public List<Entry> roster;
     }
 
-    public static class RaidManager
+    internal static class RaidManager
     {
         private static T MaxOrDefault<T>(this IEnumerable<T> enumeration) where T : struct
         {
@@ -197,7 +197,7 @@ namespace DiscordBot.Raids
                     user_id   = user_id,
                     user_name = null,
                     backup    = backup,
-                    roles     = roles.ToList()
+                    roles     = roles.ToArray()
                 };
 
                 //Append the raider
@@ -222,7 +222,7 @@ namespace DiscordBot.Raids
                     user_id   = null,
                     user_name = user_name,
                     backup    = backup,
-                    roles     = roles.ToList()
+                    roles     = roles.ToArray()
                 };
 
                 //Append the raider
@@ -300,8 +300,8 @@ namespace DiscordBot.Raids
         /// Returns a distinct list of raiders with the most
         /// up-to-date values.
         /// </summary>
-        /// <param name="raid_id">The ID of the raid.</param>
-        public static List<Entry> CoalesceRaiders(RaidHandle handle)
+        /// <param name="handle">The handle to the raid.</param>
+        public static Entry[] CoalesceRaiders(RaidHandle handle)
         {
             //Catch any errors
             return Debug.Try(() =>
@@ -310,7 +310,7 @@ namespace DiscordBot.Raids
                 var roster = GetRosterHistory(handle);
 
                 //Check if it's empty
-                if (roster.Count() == 0) return new List<Entry>();
+                if (roster.Count() == 0) return Array.Empty<Entry>();
 
                 //Find the most recent entries for each user
                 var entries = roster.Reverse().Distinct();
@@ -318,8 +318,8 @@ namespace DiscordBot.Raids
                 //Return the most recent entries while maintaining the correct join order
                 return roster.Distinct()
                              .Select  (e => entries.First(e2 => e2.Equals(e)))
-                             .ToList  ();
-            }, new List<Entry>());
+                             .ToArray ();
+            }, Array.Empty<Entry>());
         }
 
         /// <summary>

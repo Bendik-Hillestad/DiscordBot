@@ -4,7 +4,6 @@ using System.Linq;
 using DiscordBot.Commands;
 using DiscordBot.Raids;
 using DiscordBot.Utils;
-using DiscordBot.Core;
 
 using Timer = System.Timers.Timer;
 
@@ -21,9 +20,6 @@ namespace DiscordBot.Modules.Raid
 
             //Load raid config
             this.raidConfig = RaidConfig.ReadConfig();
-
-            //Compile
-            this.raidConfig.GenerateSolverLibrary();
 
             //Create a timer to periodically clean up old raids
             Timer t = new Timer(60 * 60 * 1000);
@@ -112,7 +108,7 @@ namespace DiscordBot.Modules.Raid
         public void raid_roster(Context ctx, uint id)
         {
             //Get all roles
-            var roles = string.Join(" ", this.raidConfig.GetAllRoles());
+            var roles = string.Join(" ", this.raidConfig.Roles);
 
             //Pass on
             this.raid_roster(ctx, id, roles);
@@ -129,6 +125,33 @@ namespace DiscordBot.Modules.Raid
 
             //Pass on
             this.raid_roster(ctx, (uint)handle.Value.raid_id);
+        }
+
+        [Command("raid aliases")]
+        public void raid_aliases(Context ctx)
+        {
+            //Pass on to the implementation
+            this.raid_aliases_impl(ctx);
+        }
+
+        [Command("raid aliases add {} => {}")]
+        public void raid_aliases_add(Context ctx, [RegexParameter(@"\w+")] string key, [RegexParameter(@"\w+")] string value)
+        {
+            //Check that the role exists
+            Precondition.Assert(this.raidConfig.HasRole(value.ToUpper()), "No role with that name.");
+
+            //Pass on to the implementation
+            this.raid_aliases_add_impl(ctx, key.ToUpper(), value.ToUpper());
+        }
+
+        [Command("raid aliases remove {}")]
+        public void raid_aliases_remove(Context ctx, [RegexParameter(@"\w+")] string key)
+        {
+            //Check that the alias exists
+            Precondition.Assert(this.raidConfig.HasAlias(key.ToUpper()), "No existing alias with that name.");
+
+            //Pass on to the implementation
+            this.raid_aliases_remove_impl(ctx, key.ToUpper());
         }
 
         [Command("raid roles")]
@@ -267,12 +290,23 @@ namespace DiscordBot.Modules.Raid
         [Command("raid make comp {} {}")]
         public void raid_make_comp(Context ctx, [RegexParameter(@"[\S\s]+")] string name, uint id)
         {
-            //Determine if a raid with this ID exists
-            var exists = RaidManager.EnumerateRaids().Any(r => r.raid_id == id);
-            Precondition.Assert(exists, $"No raid with that id ({id}).");
+            //Get a handle to the raid
+            var handle = RaidManager.GetRaidFromID((int)id);
+
+            //Make sure it exists
+            Precondition.Assert(handle.HasValue, $"No raid with that id ({id}");
+
+            //Check that the composition exists
+            string[] layout ;
+            Precondition.Assert
+            (
+                this.raidConfig.Compositions.TryGetValue(name.ToUpper(), out layout),
+                "No comp with that name. These are the recognised comps: \n" +
+                string.Join(", ", this.raidConfig.Compositions.Keys)
+            );
 
             //Pass on to the implementation
-            this.raid_make_comp_impl(ctx, name, (int)id);
+            this.raid_make_comp_impl(ctx, handle.Value, layout);
         }
 
         [Command("raid make comp {}")]
@@ -313,18 +347,19 @@ namespace DiscordBot.Modules.Raid
             );
 
             //Get the index of the comp
-            var idx = this.raidConfig.GetCompIndex(name.ToUpper());
+            //var idx = this.raidConfig.GetCompIndex(name.ToUpper());
+            bool exists = this.raidConfig.Compositions.ContainsKey(name.ToUpper());
 
             //Check that it exists
             Precondition.Assert
             (
-                idx != -1,
+                exists,
                 "No comp with that name. These are the recognised comps: \n" +
-                string.Join(", ", this.raidConfig.GetCompNames())
+                string.Join(", ", this.raidConfig.Compositions.Keys)
             );
 
             //Pass on to implementation
-            this.raid_delete_comp_impl(ctx, idx);
+            this.raid_delete_comp_impl(ctx, name);
         }
 
         [Command("raid show comps")]
