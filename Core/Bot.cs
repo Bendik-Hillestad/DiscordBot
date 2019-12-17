@@ -262,7 +262,7 @@ namespace DiscordBot.Core
                         }
 
                         //Log message
-                        Logger.Log("[" + msg.Author.Username + " -> " + msg.Channel.Name + "]: " + Utility.ReplaceEmojies(msg.Content));
+                        Logger.Log("[" + msg.Author.Username + " -> " + msg.Channel.Name + "]: " + msg.Content);
 
                         //Skip our own messages
                         if (msg.Author.Id == client.CurrentUser.Id) continue;
@@ -270,7 +270,7 @@ namespace DiscordBot.Core
                         //Save the context
                         this.context = (msg.Channel as SocketGuildChannel)?.Guild;
 
-                        //Get all lines starting with one of !#$ followed by a command
+                        //Get all lines starting with one of !#$@ followed by a command
                         var matches = Regex.Matches(msg.Content, @"^[\!\#\$\@](\w+)", RegexOptions.Multiline);
 
                         //Iterate through the matches
